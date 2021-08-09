@@ -1143,3 +1143,134 @@ int ff_int_from_list_or_default(void *ctx, const char * val_name, int val,
            "%s %d are not supported. Set to default value : %d\n", val_name, val, default_value);
     return default_value;
 }
+
+void ff_dump_simd_s8(int line, const char *msg, int first, int last, const int8_t *ptr);
+void ff_dump_simd_s8(int line, const char *msg, int first, int last, const int8_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int v = first; v <= last; v++) {
+        const int8_t *vec = &ptr[16*v];
+        printf("v%02d = {", v);
+        for (int i = 0; i < 16; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#elif defined(__arm__)
+    for (int v = first; v <= last; v++) {
+        const int8_t *vec = &ptr[8*v];
+        printf("d%02d = {", v);
+        for (int i = 0; i < 8; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#endif
+    fflush(stdout);
+}
+
+void ff_dump_simd_u8(int line, const char *msg, int first, int last, const uint8_t *ptr);
+void ff_dump_simd_u8(int line, const char *msg, int first, int last, const uint8_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int v = first; v <= last; v++) {
+        const uint8_t *vec = &ptr[16*v];
+        printf("v%02d = {", v);
+        for (int i = 0; i < 16; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#elif defined(__arm__)
+    for (int v = first; v <= last; v++) {
+        const uint8_t *vec = &ptr[8*v];
+        printf("d%02d = {", v);
+        for (int i = 0; i < 8; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#endif
+    fflush(stdout);
+}
+
+void ff_dump_simd_s16(int line, const char *msg, int first, int last, const int16_t *ptr);
+void ff_dump_simd_s16(int line, const char *msg, int first, int last, const int16_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int v = first; v <= last; v++) {
+        const int16_t *vec = &ptr[8*v];
+        printf("v%02d = {", v);
+        for (int i = 0; i < 8; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#elif defined(__arm__)
+    for (int v = first; v <= last; v++) {
+        const int16_t *vec = &ptr[4*v];
+        printf("d%02d = {", v);
+        for (int i = 0; i < 4; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#endif
+    fflush(stdout);
+}
+
+void ff_dump_simd_u16(int line, const char *msg, int first, int last, const uint16_t *ptr);
+void ff_dump_simd_u16(int line, const char *msg, int first, int last, const uint16_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int v = first; v <= last; v++) {
+        const uint16_t *vec = &ptr[8*v];
+        printf("v%02d = {", v);
+        for (int i = 0; i < 8; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#elif defined(__arm__)
+    for (int v = first; v <= last; v++) {
+        const uint16_t *vec = &ptr[4*v];
+        printf("d%02d = {", v);
+        for (int i = 0; i < 4; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#endif
+    fflush(stdout);
+}
+
+void ff_dump_simd_s32(int line, const char *msg, int first, int last, const int32_t *ptr);
+void ff_dump_simd_s32(int line, const char *msg, int first, int last, const int32_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int v = first; v <= last; v++) {
+        const int32_t *vec = &ptr[4*v];
+        printf("v%02d = {", v);
+        for (int i = 0; i < 4; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#elif defined(__arm__)
+    for (int v = first; v <= last; v++) {
+        const int32_t *vec = &ptr[2*v];
+        printf("d%02d = {", v);
+        for (int i = 0; i < 2; i++)
+            printf("%s %d", i > 0 ? "," : "", vec[i]);
+        printf(" }\n");
+    }
+#endif
+    fflush(stdout);
+}
+
+void ff_dump_gpr(int line, const char *msg, int first, int last, const size_t *ptr);
+void ff_dump_gpr(int line, const char *msg, int first, int last, const size_t *ptr) {
+    printf("%d: %s:\n", line, msg);
+#ifdef __aarch64__
+    for (int r = first; r <= last; r++)
+        printf("x%02d = %"PRIx64"\n", r, (uint64_t) ptr[r]);
+#elif defined(__arm__)
+    for (int r = first; r <= last; r++)
+        if (r < 13)
+            printf("r%02d = %"PRIx32"\n", r, (uint32_t) ptr[r]);
+        else
+            printf("%s  = %"PRIx32"\n", r == 13 ? "sp" : "lr", (uint32_t) ptr[r]);
+#endif
+    fflush(stdout);
+}
