@@ -288,7 +288,6 @@ void *checkasm_get_wrapper(void);
 #endif
 
 typedef struct CheckasmPerf {
-    int sysfd;
     uint64_t cycles;
     int iterations;
     uint64_t (*start)(void);
@@ -311,7 +310,6 @@ typedef struct CheckasmPerf {
     do {\
         if (checkasm_bench_func()) {\
             struct CheckasmPerf *restrict perf = checkasm_get_perf_context();\
-            av_unused const int sysfd = perf->sysfd;\
             func_type *tfunc = func_new;\
             uint64_t tsum = 0;\
             int ti, tcount = 0;\

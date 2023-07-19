@@ -542,7 +542,6 @@ static int measure_nop_time(void)
 {
     uint16_t nops[10000];
     int i, nop_sum = 0;
-    av_unused const int sysfd = state.sysfd;
 #if CONFIG_LINUX_PERF || CONFIG_MACOS_KPERF
     struct {
          uint64_t (*start)(void);
@@ -1013,7 +1012,6 @@ CheckasmPerf *checkasm_get_perf_context(void)
 {
     CheckasmPerf *perf = &state.current_func_ver->perf;
     memset(perf, 0, sizeof(*perf));
-    perf->sysfd = state.sysfd;
     perf->start = state.start;
     perf->stop = state.stop;
     return perf;
