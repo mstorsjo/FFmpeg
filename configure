@@ -5791,7 +5791,7 @@ case $target_os in
         ;;
     linux)
         enable section_data_rel_ro
-        enabled_any arm aarch64 && enable_weak linux_perf
+        enabled_any arm aarch64 riscv && enable_weak linux_perf
         ;;
     irix*)
         target_os=irix
