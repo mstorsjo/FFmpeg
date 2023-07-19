@@ -789,17 +789,18 @@ static int bench_init_linux(void)
     state.close = checkasm_bench_linux_perf_close;
     return 0;
 }
-#elif CONFIG_MACOS_KPERF
+#endif
+#if CONFIG_MACOS_KPERF
 static int bench_init_kperf(void)
 {
     ff_kperf_init();
     state.start = state.stop = ff_kperf_cycles;
     return 0;
 }
-#else
+#endif
+#ifdef AV_READ_TIME
 static int bench_init_ffmpeg(void)
 {
-#ifdef AV_READ_TIME
     if (!checkasm_save_context()) {
         checkasm_set_signal_handler_state(1);
         AV_READ_TIME();
@@ -809,25 +810,30 @@ static int bench_init_ffmpeg(void)
         return -1;
     }
     printf("benchmarking with native FFmpeg timers\n");
+    state.start = state.stop = AV_READ_TIME;
     return 0;
-#else
-    fprintf(stderr, "checkasm: --bench is not supported on your system\n");
-    return -1;
-#endif
 }
 #endif
 
 static int bench_init(void)
 {
+    int ret = -1;
 #if CONFIG_LINUX_PERF
-    int ret = bench_init_linux();
-#elif CONFIG_MACOS_KPERF
-    int ret = bench_init_kperf();
-#else
-    int ret = bench_init_ffmpeg();
-#endif
     if (ret < 0)
-        return ret;
+        ret = bench_init_linux();
+#endif
+#if CONFIG_MACOS_KPERF
+    if (ret < 0)
+        ret = bench_init_kperf();
+#endif
+#ifdef AV_READ_TIME
+    if (ret < 0)
+        ret = bench_init_ffmpeg();
+#endif
+    if (ret < 0) {
+        fputs("checkasm: --bench is not supported on your system\n", stderr);
+        return -1;
+    }
 
     state.nop_time = measure_nop_time();
     printf("nop: %d.%d\n", state.nop_time/10, state.nop_time%10);
