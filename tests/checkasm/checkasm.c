@@ -534,11 +534,9 @@ static int measure_nop_time(void)
     int i, nop_sum = 0;
     av_unused const int sysfd = state.sysfd;
 
-    uint64_t t = 0;
     for (i = 0; i < 10000; i++) {
-        PERF_START(t);
-        PERF_STOP(t);
-        nops[i] = t;
+        uint64_t t = checkasm_bench_start();
+        nops[i] = checkasm_bench_stop() - t;
     }
 
     qsort(nops, 10000, sizeof(uint16_t), cmp_nop);
@@ -727,6 +725,24 @@ static void print_cpu_name(void)
 }
 
 #if CONFIG_LINUX_PERF
+uint64_t checkasm_bench_linux_perf_start(void)
+{
+    int fd = state.sysfd;
+
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+    return 0;
+}
+
+uint64_t checkasm_bench_linux_perf_stop(void)
+{
+    uint64_t t;
+    int fd = state.sysfd;
+
+    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+    return (read(fd, &t, sizeof(t)) == sizeof (t)) ? t : 0;
+}
+
 static int bench_init_linux(void)
 {
     struct perf_event_attr attr = {

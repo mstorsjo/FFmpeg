@@ -302,25 +302,20 @@ typedef struct CheckasmPerf {
     int iterations;
 } CheckasmPerf;
 
-#if defined(AV_READ_TIME) || CONFIG_LINUX_PERF || CONFIG_MACOS_KPERF
-
 #if CONFIG_LINUX_PERF
-#define PERF_START(t) do {                              \
-    ioctl(sysfd, PERF_EVENT_IOC_RESET, 0);              \
-    ioctl(sysfd, PERF_EVENT_IOC_ENABLE, 0);             \
-} while (0)
-#define PERF_STOP(t) do {                               \
-    int ret;                                            \
-    ioctl(sysfd, PERF_EVENT_IOC_DISABLE, 0);            \
-    ret = read(sysfd, &t, sizeof(t));                   \
-    (void)ret;                                          \
-} while (0)
+uint64_t checkasm_bench_linux_perf_start(void);
+uint64_t checkasm_bench_linux_perf_stop(void);
+#define checkasm_bench_start() checkasm_bench_linux_perf_start()
+#define checkasm_bench_stop()  checkasm_bench_linux_perf_stop()
 #elif CONFIG_MACOS_KPERF
-#define PERF_START(t) t = ff_kperf_cycles()
-#define PERF_STOP(t)  t = ff_kperf_cycles() - t
+#define checkasm_bench_start() ff_kperf_cycles()
+#define checkasm_bench_stop()  ff_kperf_cycles()
+#elif defined (AV_READ_TIME)
+#define checkasm_bench_start() AV_READ_TIME()
+#define checkasm_bench_stop()  AV_READ_TIME()
 #else
-#define PERF_START(t) t = AV_READ_TIME()
-#define PERF_STOP(t)  t = AV_READ_TIME() - t
+#define checkasm_bench_start() UINT64_C(0)
+#define checkasm_bench_stop()  UINT64_C(0)
 #endif
 
 /* Benchmark the function */
@@ -335,12 +330,12 @@ typedef struct CheckasmPerf {
             uint64_t t = 0; \
             checkasm_set_signal_handler_state(1);\
             for (ti = 0; ti < BENCH_RUNS; ti++) {\
-                PERF_START(t);\
+                t = checkasm_bench_start(); \
                 tfunc(__VA_ARGS__);\
                 tfunc(__VA_ARGS__);\
                 tfunc(__VA_ARGS__);\
                 tfunc(__VA_ARGS__);\
-                PERF_STOP(t);\
+                t = checkasm_bench_stop() - t;\
                 if (t*tcount <= tsum*4 && ti > 0) {\
                     tsum += t;\
                     tcount++;\
@@ -352,11 +347,6 @@ typedef struct CheckasmPerf {
             checkasm_set_signal_handler_state(0);\
         }\
     } while (0)
-#else
-#define bench_new(...) while(0)
-#define PERF_START(t)  while(0)
-#define PERF_STOP(t)   while(0)
-#endif
 
 #define DECL_CHECKASM_CHECK_FUNC(type) \
 int checkasm_check_##type(const char *file, int line, \
