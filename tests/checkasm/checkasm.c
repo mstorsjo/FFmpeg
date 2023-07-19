@@ -61,6 +61,14 @@
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#if CONFIG_LINUX_PERF
+#include <sys/ioctl.h>
+#include <asm/unistd.h>
+#include <linux/perf_event.h>
+#endif
+#if CONFIG_MACOS_KPERF
+#include "libavutil/macos_kperf.h"
+#endif
 
 #if !HAVE_ISATTY
 #define isatty(fd) 1
@@ -332,6 +340,8 @@ static struct {
     /* perf */
     int nop_time;
     int sysfd;
+    uint64_t (*start)(void);
+    uint64_t (*stop)(void);
 
     int cpu_flag;
     const char *cpu_flag_name;
@@ -533,6 +543,12 @@ static int measure_nop_time(void)
     uint16_t nops[10000];
     int i, nop_sum = 0;
     av_unused const int sysfd = state.sysfd;
+#if CONFIG_LINUX_PERF || CONFIG_MACOS_KPERF
+    struct {
+         uint64_t (*start)(void);
+         uint64_t (*stop)(void);
+    } p = { state.start, state.stop }, *perf = &p;
+#endif
 
     for (i = 0; i < 10000; i++) {
         uint64_t t = checkasm_bench_start();
@@ -725,7 +741,7 @@ static void print_cpu_name(void)
 }
 
 #if CONFIG_LINUX_PERF
-uint64_t checkasm_bench_linux_perf_start(void)
+static uint64_t checkasm_bench_linux_perf_start(void)
 {
     int fd = state.sysfd;
 
@@ -734,7 +750,7 @@ uint64_t checkasm_bench_linux_perf_start(void)
     return 0;
 }
 
-uint64_t checkasm_bench_linux_perf_stop(void)
+static uint64_t checkasm_bench_linux_perf_stop(void)
 {
     uint64_t t;
     int fd = state.sysfd;
@@ -761,12 +777,15 @@ static int bench_init_linux(void)
         perror("perf_event_open");
         return -1;
     }
+    state.start = checkasm_bench_linux_perf_start;
+    state.stop = checkasm_bench_linux_perf_stop;
     return 0;
 }
 #elif CONFIG_MACOS_KPERF
 static int bench_init_kperf(void)
 {
     ff_kperf_init();
+    state.start = state.stop = ff_kperf_cycles;
     return 0;
 }
 #else
@@ -995,6 +1014,8 @@ CheckasmPerf *checkasm_get_perf_context(void)
     CheckasmPerf *perf = &state.current_func_ver->perf;
     memset(perf, 0, sizeof(*perf));
     perf->sysfd = state.sysfd;
+    perf->start = state.start;
+    perf->stop = state.stop;
     return perf;
 }
 

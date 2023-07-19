@@ -26,15 +26,6 @@
 #include <stdint.h>
 #include "config.h"
 
-#if CONFIG_LINUX_PERF
-#include <unistd.h> // read(3)
-#include <sys/ioctl.h>
-#include <asm/unistd.h>
-#include <linux/perf_event.h>
-#elif CONFIG_MACOS_KPERF
-#include "libavutil/macos_kperf.h"
-#endif
-
 #include "libavutil/avstring.h"
 #include "libavutil/cpu.h"
 #include "libavutil/emms.h"
@@ -300,16 +291,13 @@ typedef struct CheckasmPerf {
     int sysfd;
     uint64_t cycles;
     int iterations;
+    uint64_t (*start)(void);
+    uint64_t (*stop)(void);
 } CheckasmPerf;
 
-#if CONFIG_LINUX_PERF
-uint64_t checkasm_bench_linux_perf_start(void);
-uint64_t checkasm_bench_linux_perf_stop(void);
-#define checkasm_bench_start() checkasm_bench_linux_perf_start()
-#define checkasm_bench_stop()  checkasm_bench_linux_perf_stop()
-#elif CONFIG_MACOS_KPERF
-#define checkasm_bench_start() ff_kperf_cycles()
-#define checkasm_bench_stop()  ff_kperf_cycles()
+#if CONFIG_LINUX_PERF || CONFIG_MACOS_KPERF
+#define checkasm_bench_start() (perf->start)()
+#define checkasm_bench_stop()  (perf->stop)()
 #elif defined (AV_READ_TIME)
 #define checkasm_bench_start() AV_READ_TIME()
 #define checkasm_bench_stop()  AV_READ_TIME()
@@ -322,7 +310,7 @@ uint64_t checkasm_bench_linux_perf_stop(void);
 #define bench_new(...)\
     do {\
         if (checkasm_bench_func()) {\
-            struct CheckasmPerf *perf = checkasm_get_perf_context();\
+            struct CheckasmPerf *restrict perf = checkasm_get_perf_context();\
             av_unused const int sysfd = perf->sysfd;\
             func_type *tfunc = func_new;\
             uint64_t tsum = 0;\
