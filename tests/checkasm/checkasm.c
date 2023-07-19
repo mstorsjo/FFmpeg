@@ -339,9 +339,12 @@ static struct {
 
     /* perf */
     int nop_time;
+#if CONFIG_LINUX_PERF
     int sysfd;
+#endif
     uint64_t (*start)(void);
     uint64_t (*stop)(void);
+    void (*close)(void);
 
     int cpu_flag;
     const char *cpu_flag_name;
@@ -758,6 +761,11 @@ static uint64_t checkasm_bench_linux_perf_stop(void)
     return (read(fd, &t, sizeof(t)) == sizeof (t)) ? t : 0;
 }
 
+static void checkasm_bench_linux_perf_close(void)
+{
+    close(state.sysfd);
+}
+
 static int bench_init_linux(void)
 {
     struct perf_event_attr attr = {
@@ -778,6 +786,7 @@ static int bench_init_linux(void)
     }
     state.start = checkasm_bench_linux_perf_start;
     state.stop = checkasm_bench_linux_perf_stop;
+    state.close = checkasm_bench_linux_perf_close;
     return 0;
 }
 #elif CONFIG_MACOS_KPERF
@@ -823,14 +832,6 @@ static int bench_init(void)
     state.nop_time = measure_nop_time();
     printf("nop: %d.%d\n", state.nop_time/10, state.nop_time%10);
     return 0;
-}
-
-static void bench_uninit(void)
-{
-#if CONFIG_LINUX_PERF
-    if (state.sysfd > 0)
-        close(state.sysfd);
-#endif
 }
 
 static int usage(const char *path)
@@ -909,7 +910,8 @@ int main(int argc, char *argv[])
     }
 
     destroy_func_tree(state.funcs);
-    bench_uninit();
+    if (state.close != NULL)
+        state.close();
     return ret;
 }
 
