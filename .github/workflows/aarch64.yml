@@ -1,0 +1,32 @@
+name: Test aarch64 specific aspects
+
+on:
+  push:
+
+# To enable this to run only on relevant pushes, we could add the
+# following:
+#    paths:
+#    - '.github/workflows/aarch64.yml'
+#    - '*/aarch64/*'
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check host type
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" != "arm64" ]; then
+              echo Unexpected host architecture $ARCH
+              exit 1
+          fi
+      - name: Build and run all tests
+        run: |
+          mkdir build
+          cd build
+          ../configure --enable-gpl --samples=../samples
+          make -j$(sysctl -n hw.ncpu)
+          make -j$(sysctl -n hw.ncpu) fate-rsync
+          make -j$(sysctl -n hw.ncpu) fate
+          make -j$(sysctl -n hw.ncpu) run-checkasm
