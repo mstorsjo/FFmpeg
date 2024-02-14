@@ -1,0 +1,97 @@
+name: Test on Windows
+
+on:
+  push:
+
+jobs:
+  llvm-mingw:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - i686
+          - x86_64
+          - aarch64
+    runs-on: ${{startsWith(matrix.arch, 'a') && 'windows-11-arm' || 'windows-latest'}}
+    steps:
+      - name: Install prerequisites
+        run: |
+          choco install nasm
+          echo "C:\Program Files\NASM" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          choco install rsync
+      - name: Avoid git checking out files with CRLF
+        run: |
+          git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          path: ffmpeg
+      - name: Install llvm-mingw
+        run: |
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20260127/llvm-mingw-20260127-ucrt-${{matrix.arch}}.zip
+          Expand-Archive llvm-mingw-*.zip -DestinationPath .
+          del llvm-mingw-*.zip
+          mv llvm-mingw-* c:\llvm-mingw
+          echo "c:\llvm-mingw\busybox\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "c:\llvm-mingw\bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build and test fate
+        shell: sh
+        run: |
+          mkdir build
+          cd build
+          ../ffmpeg/configure --target-os=mingw32 --enable-gpl --samples=../fate-samples
+          make -j$(nproc)
+          make fate-rsync
+          make -j$(nproc) fate
+
+  msvc:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86
+          - x64
+          - arm64
+    runs-on: ${{startsWith(matrix.arch, 'a') && 'windows-11-arm' || 'windows-latest'}}
+    steps:
+      - name: Install prerequisites
+        run: |
+          choco install nasm
+          echo "C:\Program Files\NASM" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          choco install rsync
+      - name: Set up the environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{matrix.arch}}
+      - name: Checkout gas-preprocessor
+        if: ${{startsWith(matrix.arch, 'a')}}
+        uses: actions/checkout@v4
+        with:
+          repository: ffmpeg/gas-preprocessor
+          ref: e29a3c6ebd85c252372eaedaf2973c6f9e9fdc4e
+          path: gas-preprocessor
+      - name: Avoid git checking out files with CRLF
+        run: |
+          git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          path: ffmpeg
+      - name: Install busybox
+        run: |
+          curl -LO https://frippery.org/files/busybox/${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}}
+          ./${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}} --install -s c:\busybox
+          echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          rm c:\busybox\link.exe
+          rm c:\busybox\make.exe
+          # This uses make c:\mingw64\bin instead, which happens to be in
+          # PATH from before.
+      - name: Build and test fate
+        shell: sh
+        run: |
+          mkdir build
+          cd build
+          export PATH=$(pwd)/../gas-preprocessor:$PATH
+          ../ffmpeg/configure ${{startsWith(matrix.arch, 'a') && '--arch=arm64' || ''}} --target-os=win32 --toolchain=msvc --enable-gpl --samples=../fate-samples
+          make -j$(nproc)
+          make fate-rsync
+          make -j$(nproc) fate
