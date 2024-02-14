@@ -1,0 +1,41 @@
+name: Test building on msys2
+
+on:
+  push:
+
+jobs:
+  msys2:
+    defaults:
+      run:
+        shell: msys2 {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: 'windows-latest', msystem: mingw32 }
+          - { runner: 'windows-latest', msystem: mingw64 }
+          - { runner: 'windows-latest', msystem: clang64 }
+          - { runner: 'windows-11-arm', msystem: mingw64 }
+          - { runner: 'windows-11-arm', msystem: clangarm64 }
+    runs-on: ${{matrix.runner}}
+    steps:
+      - name: Avoid git checking out files with CRLF
+        shell: cmd
+        run: |
+          git config --global core.autocrlf false
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{matrix.msystem}}
+          install: >-
+            unzip
+            make
+            rsync
+            diffutils
+          pacboy: >-
+            toolchain:p
+            nasm:p
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          ./configure || { cat ffbuild/config.log; exit 1; }
+          make -j$(nproc)
