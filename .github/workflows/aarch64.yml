@@ -198,6 +198,7 @@ jobs:
       - name: Test checkasm
         run: |
           cd build
+          make -j$(nproc)
           make -j$(nproc) run-checkasm
 
   llvm-mingw:
@@ -218,6 +219,7 @@ jobs:
           mkdir build
           cd build
           ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine-arm64
+          make -j$(nproc)
           make -j$(nproc) run-checkasm
 
   msvc:
