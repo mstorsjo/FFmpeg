@@ -46,6 +46,8 @@
 #include "macos_kperf.h"
 #elif HAVE_MACH_ABSOLUTE_TIME
 #include <mach/mach_time.h>
+#elif HAVE_CLOCK_GETTIME
+#include <time.h>
 #endif
 
 #include "common.h"
@@ -70,6 +72,9 @@
 #       define AV_READ_TIME gethrtime
 #   elif HAVE_MACH_ABSOLUTE_TIME
 #       define AV_READ_TIME mach_absolute_time
+#   elif HAVE_CLOCK_GETTIME && defined(CLOCK_MONOTONIC)
+#       include "libavutil/time.h"
+#       define AV_READ_TIME av_gettime_relative
 #   endif
 #endif
 
