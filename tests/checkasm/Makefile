@@ -64,6 +64,7 @@ CHECKASMOBJS-$(CONFIG_AVFILTER) += $(AVFILTEROBJS-yes)
 
 # swscale tests
 SWSCALEOBJS                             += sw_gbrp.o
+SWSCALEOBJS                             += sw_range_convert.o
 SWSCALEOBJS                             += sw_rgb.o
 SWSCALEOBJS                             += sw_scale.o
 
