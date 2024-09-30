@@ -1,0 +1,134 @@
+add_compile_definitions(HAVE_AV_CONFIG_H)
+set(avutil_src
+    adler32.c
+    aes.c
+    aes_ctr.c
+    ambient_viewing_environment.c
+    audio_fifo.c
+    avstring.c
+    avsscanf.c
+    base64.c
+    blowfish.c
+    bprint.c
+    buffer.c
+    cast5.c
+    camellia.c
+    channel_layout.c
+    cpu.c
+    crc.c
+    csp.c
+    des.c
+    detection_bbox.c
+    dict.c
+    display.c
+    dovi_meta.c
+    downmix_info.c
+    encryption_info.c
+    error.c
+    eval.c
+    executor.c
+    fifo.c
+    file.c
+    file_open.c
+    float_dsp.c
+    film_grain_params.c
+    fixed_dsp.c
+    frame.c
+    hash.c
+    hdr_dynamic_metadata.c
+    hdr_dynamic_vivid_metadata.c
+    hmac.c
+    hwcontext.c
+    hwcontext_stub.c
+    iamf.c
+    imgutils.c
+    integer.c
+    intmath.c
+    lfg.c
+    lls.c
+    log.c
+    log2_tab.c
+    lzo.c
+    mathematics.c
+    mastering_display_metadata.c
+    md5.c
+    mem.c
+    murmur3.c
+    opt.c
+    parseutils.c
+    pixdesc.c
+    pixelutils.c
+    random_seed.c
+    rational.c
+    reverse.c
+    rc4.c
+    ripemd.c
+    samplefmt.c
+    sha.c
+    sha512.c
+    slicethread.c
+    spherical.c
+    stereo3d.c
+    threadmessage.c
+    time.c
+    timecode.c
+    timestamp.c
+    tree.c
+    twofish.c
+    utils.c
+    xga_font_data.c
+    xtea.c
+    tea.c
+    tx.c
+    tx_float.c
+    tx_double.c
+    tx_int32.c
+    uuid.c
+    version.c
+    video_enc_params.c
+    video_hint.c)
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  list(APPEND avutil_src
+      aarch64/cpu.c
+      aarch64/float_dsp_init.c
+      aarch64/tx_float_init.c
+      aarch64/float_dsp_neon.S
+      aarch64/tx_float_neon.S)
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "arm")
+  list(APPEND avutil_src
+      arm/cpu.c
+      arm/float_dsp_init_arm.c
+      arm/float_dsp_init_vfp.c
+      arm/float_dsp_vfp.S
+      arm/float_dsp_init_neon.c
+      arm/float_dsp_neon.S)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "i386")
+  list(APPEND avutil_src
+      x86/cpu.c
+      x86/fixed_dsp_init.c
+      x86/float_dsp_init.c
+      x86/imgutils_init.c
+      x86/lls_init.c
+      x86/tx_float_init.c
+      x86/pixelutils_init.c)
+  if(CMAKE_ASM_NASM_COMPILER)
+    set(x86_nasm_sources
+        x86/cpuid.asm
+        x86/emms.asm
+        x86/fixed_dsp.asm
+        x86/float_dsp.asm
+        x86/imgutils.asm
+        x86/lls.asm
+        x86/pixelutils.asm
+        x86/tx_float.asm)
+    list(APPEND avutil_src
+        ${x86_nasm_sources})
+    set_source_files_properties(${x86_nasm_sources} PROPERTIES LANGUAGE ASM_NASM)
+  endif()
+endif()
+if (WIN32)
+  list(APPEND avutil_link bcrypt)
+endif()
+add_library(avutil ${avutil_src})
+target_link_libraries(avutil LINK_PRIVATE ${avutil_link})
+add_subdirectory(tests)
