@@ -1,0 +1,207 @@
+name: Test building ffmpeg
+
+on:
+  push:
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test checkasm
+        run: |
+          sudo apt-get update && sudo apt-get install nasm ninja-build
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+          ninja
+          libavutil/tests/cpu
+          tests/checkasm/checkasm
+
+  linux-i386:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test checkasm
+        run: |
+          sudo apt-get update && sudo apt-get install nasm ninja-build gcc-multilib
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=i386 -DCMAKE_C_FLAGS_INIT=-m32
+          ninja
+          libavutil/tests/cpu
+          tests/checkasm/checkasm
+
+  linux-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-linux-gnu,   arch: aarch64,   qemu: aarch64 }
+          - { triple: arm-linux-gnueabihf, arch: arm,       qemu: arm }
+          - { triple: riscv64-linux-gnu,   arch: riscv64,   qemu: riscv64 }
+          - { triple: powerpc64-linux-gnu, arch: powerpc64, qemu: ppc64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test checkasm
+        run: |
+          sudo apt-get update && sudo apt-get install qemu-user-static gcc-${{matrix.triple}} ninja-build
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{matrix.arch}} -DCMAKE_C_COMPILER=${{matrix.triple}}-gcc
+          ninja
+          qemu-${{matrix.qemu}}-static -L /usr/${{matrix.triple}} libavutil/tests/cpu
+          qemu-${{matrix.qemu}}-static -L /usr/${{matrix.triple}} tests/checkasm/checkasm
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-13
+          - macos-14
+    runs-on: ${{matrix.runner}}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run all tests
+        run: |
+          brew install nasm ninja
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+          ninja
+          libavutil/tests/cpu
+          tests/checkasm/checkasm
+
+  clangcl:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Debian/Ubuntu's Clang requires -mfpu=neon for armv7 Windows,
+        # even if it should be implicit for Windows targets.
+        include:
+          - { msvcarch: x64,   arch: x86_64,  clangarch: x86_64  }
+          - { msvcarch: x86,   arch: i386,    clangarch: i386    }
+          - { msvcarch: arm,   arch: arm,     clangarch: armv7,  asmflags: '-clang:-mfpu=neon' }
+          - { msvcarch: arm64, arch: aarch64, clangarch: aarch64 }
+    steps:
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install python3 msitools ca-certificates clang lld llvm cmake ninja-build nasm
+      - name: Checkout msvc-wine
+        uses: actions/checkout@v4
+        with:
+          repository: mstorsjo/msvc-wine
+          ref: 2055e1b2a67868605479a4b0d747d1e58d2a8679
+          path: msvc-wine
+      - name: Download MSVC
+        run: |
+          msvc-wine/vsdownload.py --accept-license --dest $(pwd)/msvc
+          msvc-wine/install.sh $(pwd)/msvc
+      - name: Set up clang-cl/lld-link symlinks
+        run: |
+          if [ ! -e /usr/bin/clang-cl ]; then
+              sudo ln -s /usr/bin/clang /usr/bin/clang-cl
+          fi
+          if [ ! -e /usr/bin/lld-link ]; then
+              sudo ln -s /usr/bin/lld /usr/bin/lld-link
+          fi
+      - uses: actions/checkout@v4
+        with:
+          path: ffmpeg
+      - name: Build
+        run: |
+          BIN=$(pwd)/msvc/bin/${{matrix.msvcarch}} . msvc-wine/msvcenv-native.sh
+          mkdir build
+          cd build
+          CC="clang-cl --target=${{matrix.clangarch}}-windows-msvc" cmake ../ffmpeg -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=${{matrix.arch}} -DCMAKE_MT=$(which llvm-mt) -DCMAKE_ASM_FLAGS="--target=${{matrix.clangarch}}-windows-msvc ${{matrix.asmflags}}"
+          ninja
+      - name: Install Wine and run tests
+        if: (matrix.arch == 'x86_64') || (matrix.arch == 'i386')
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update && sudo apt-get install wine32 wine64
+          wine wineboot
+          cd build
+          wine libavutil/tests/cpu
+          wine tests/checkasm/checkasm
+
+  llvm-mingw-x86:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - i686
+          - x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install ninja-build nasm
+      - name: Install llvm-mingw
+        run: |
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20241001/llvm-mingw-20241001-ucrt-ubuntu-20.04-x86_64.tar.xz
+          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-x86_64.tar.xz
+          rm llvm-mingw-*.tar.xz
+          mv llvm-mingw-* /opt/llvm-mingw
+          echo /opt/llvm-mingw/bin >> $GITHUB_PATH
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=${{matrix.arch}} -DCMAKE_C_COMPILER=${{matrix.arch}}-w64-mingw32-gcc
+          ninja
+      - name: Install Wine and run tests
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update && sudo apt-get install wine32 wine64
+          wine wineboot
+          cd build
+          wine libavutil/tests/cpu.exe
+          wine tests/checkasm/checkasm.exe
+
+  llvm-mingw-arm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - armv7
+          - aarch64
+    container: linaro/wine-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install prerequisites
+        run: |
+          apt-get update && apt-get install -y cmake ninja-build
+      - name: Install llvm-mingw
+        run: |
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20241001/llvm-mingw-20241001-ucrt-ubuntu-20.04-x86_64.tar.xz
+          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-x86_64.tar.xz
+          rm llvm-mingw-*.tar.xz
+          mv llvm-mingw-* /opt/llvm-mingw
+          echo /opt/llvm-mingw/bin >> $GITHUB_PATH
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=${{matrix.arch}} -DCMAKE_C_COMPILER=${{matrix.arch}}-w64-mingw32-gcc
+          ninja
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{matrix.arch}}
+          path: |
+            build/libavutil/tests/cpu.exe
+            build/tests/checkasm/checkasm.exe
+          retention-days: 7
+      - name: Run tests
+        if: (matrix.arch == 'aarch64')
+        run: |
+          set -x
+          wine-arm64 wineboot
+          cd build
+          wine-arm64 libavutil/tests/cpu.exe
+          wine-arm64 tests/checkasm/checkasm.exe
