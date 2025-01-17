@@ -26,27 +26,32 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-gcc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          sudo apt-get update && sudo apt-get install qemu-user-static gcc-aarch64-linux-gnu
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --target-exec="qemu-aarch64-static -L /usr/aarch64-linux-gnu" --enable-gpl
+          ../configure --enable-gpl --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   linux-clang:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          sudo apt-get update && sudo apt-get install qemu-user-static gcc-aarch64-linux-gnu clang
+          sudo apt-get update && sudo apt-get install clang
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --target-exec="qemu-aarch64-static -L /usr/aarch64-linux-gnu" --enable-gpl --cc="clang -target aarch64-linux-gnu"
+          ../configure --enable-gpl --cc=clang --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   linux-pacbti:
