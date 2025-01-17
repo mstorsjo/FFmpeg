@@ -203,23 +203,25 @@ jobs:
           docker run --rm -v $(pwd):/host linaro/wine-arm64 wine-arm64 /host/tests/checkasm/checkasm.exe
 
   llvm-mingw:
-    runs-on: ubuntu-latest
-    container: linaro/wine-arm64
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/mstorsjo/wine
     steps:
       - uses: actions/checkout@v4
       - name: Install llvm-mingw
         run: |
-          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-ubuntu-20.04-x86_64.tar.xz
-          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-x86_64.tar.xz
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-ubuntu-20.04-aarch64.tar.xz
+          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-aarch64.tar.xz
           rm llvm-mingw-*.tar.xz
           mv llvm-mingw-* /opt/llvm-mingw
           echo /opt/llvm-mingw/bin >> $GITHUB_PATH
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          apt-get update && apt-get install -y make gcc
           mkdir build
           cd build
-          ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine-arm64
+          ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   msvc:
