@@ -26,44 +26,40 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-gcc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          sudo apt-get update && sudo apt-get install qemu-user-static gcc-aarch64-linux-gnu
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --target-exec="qemu-aarch64-static -L /usr/aarch64-linux-gnu" --enable-gpl
+          ../configure --enable-gpl --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   linux-clang:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          sudo apt-get update && sudo apt-get install qemu-user-static gcc-aarch64-linux-gnu clang
+          sudo apt-get update && sudo apt-get install clang
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --target-exec="qemu-aarch64-static -L /usr/aarch64-linux-gnu" --enable-gpl --cc="clang -target aarch64-linux-gnu"
+          ../configure --enable-gpl --cc=clang --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   linux-pacbti:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
       - name: Set up Fedora cross sysroot
         run: |
-          # docker run --rm -v $PWD:/host arm64v8/fedora:35 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
-          # This takes 14 minutes when run in QEMU, but takes 1 minute when run natively
-          # on an actual aarch64 linux machine. Thus skip it and fetch a premade tarball
-          # instead.
-          curl -LO https://martin.st/temp/fedora35-aarch64-sysroot.tar.xz
-          xz -d fedora*.tar.xz
+          docker run --rm -v $PWD:/host fedora:35 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
           mkdir -p /opt/fedora-sysroot
           tar -C /opt/fedora-sysroot -xf fedora*.tar
           rm fedora*.tar
@@ -72,13 +68,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and test checkasm
         run: |
-          sudo apt-get update && sudo apt-get install binutils-aarch64-linux-gnu clang
-          # Using the QEMU installed by setup-qemu-action above, via binfmt, so no
-          # --target-exec is needed, but point to the sysroot with QEMU_LD_PREFIX.
-          export QEMU_LD_PREFIX=/opt/fedora-sysroot
+          sudo apt-get update && sudo apt-get install clang qemu-user-static
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --cc="clang -target aarch64-linux-gnu" --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -Wl,-z,force-bti -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl
+          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -Wl,-z,force-bti -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl --target-exec="qemu-aarch64-static -L /opt/fedora-sysroot"
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
@@ -162,7 +155,8 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/mstorsjo/wine
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
@@ -190,40 +184,42 @@ jobs:
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
+          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine
           make -j$(nproc) checkasm
       - name: Test checkasm
         run: |
           cd build
-          docker run --rm -v $(pwd):/host linaro/wine-arm64 wine-arm64 /host/tests/checkasm/checkasm.exe
+          make -j$(nproc) run-checkasm
 
   llvm-mingw:
-    runs-on: ubuntu-latest
-    container: linaro/wine-arm64
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/mstorsjo/wine
     steps:
       - uses: actions/checkout@v4
       - name: Install llvm-mingw
         run: |
-          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-ubuntu-20.04-x86_64.tar.xz
-          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-x86_64.tar.xz
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-ubuntu-20.04-aarch64.tar.xz
+          tar -Jxf llvm-mingw-*-ucrt-ubuntu-*-aarch64.tar.xz
           rm llvm-mingw-*.tar.xz
           mv llvm-mingw-* /opt/llvm-mingw
           echo /opt/llvm-mingw/bin >> $GITHUB_PATH
-      - name: Build and test checkasm
+      - name: Build and run all tests
         run: |
-          apt-get update && apt-get install -y make gcc
           mkdir build
           cd build
-          ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine-arm64
+          ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine --samples=../samples
+          make -j$(nproc)
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   msvc:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     steps:
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm64
+          arch: arm64
       - name: Checkout gas-preprocessor
         uses: actions/checkout@v4
         with:
@@ -239,7 +235,7 @@ jobs:
           path-type: inherit
           install: >-
             make
-      - name: Build
+      - name: Build and test checkasm
         shell: msys2 {0}
         run: |
           mkdir build
@@ -247,6 +243,7 @@ jobs:
           export PATH=$(pwd)/../gas-preprocessor:$PATH
           ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
           make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
 
   indent:
     runs-on: ubuntu-latest
