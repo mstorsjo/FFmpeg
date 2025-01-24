@@ -167,7 +167,8 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/mstorsjo/wine
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
@@ -195,12 +196,12 @@ jobs:
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
+          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine
           make -j$(nproc) checkasm
       - name: Test checkasm
         run: |
           cd build
-          docker run --rm -v $(pwd):/host linaro/wine-arm64 wine-arm64 /host/tests/checkasm/checkasm.exe
+          make -j$(nproc) run-checkasm
 
   llvm-mingw:
     runs-on: ubuntu-24.04-arm
