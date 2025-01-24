@@ -175,6 +175,12 @@ jobs:
   msvc-wine:
     runs-on: ubuntu-24.04-arm
     container: ghcr.io/mstorsjo/wine
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm
+          - arm64
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
@@ -202,8 +208,8 @@ jobs:
           apt-get update && apt-get install -y rsync
           mkdir build
           cd build
-          export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine --samples=../samples
+          export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/${{matrix.arch}}:$PATH
+          ../ffmpeg/configure --arch=${{matrix.arch}} --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine --samples=../samples
           make -j$(nproc)
           make -j$(nproc) fate-rsync
           make -j$(nproc) fate
@@ -212,6 +218,12 @@ jobs:
   llvm-mingw:
     runs-on: ubuntu-24.04-arm
     container: ghcr.io/mstorsjo/wine
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - armv7
+          - aarch64
     steps:
       - uses: actions/checkout@v4
       - name: Install llvm-mingw
@@ -225,7 +237,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure --arch=aarch64 --target-os=mingw32 --cross-prefix=aarch64-w64-mingw32- --enable-gpl --target-exec=wine --samples=../samples
+          ../configure --arch=${{matrix.arch}} --target-os=mingw32 --cross-prefix=${{matrix.arch}}-w64-mingw32- --enable-gpl --target-exec=wine --samples=../samples
           make -j$(nproc)
           make -j$(nproc) fate-rsync
           make -j$(nproc) fate
