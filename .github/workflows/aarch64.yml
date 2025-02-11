@@ -162,9 +162,7 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
-    # Current versions of MSVC seem to often hang in Wine in Ubuntu 24.04
-    # when building ffmpeg, this seems to work better in 22.04.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     container: linaro/wine-arm64
     steps:
       - name: Checkout msvc-wine
