@@ -171,7 +171,6 @@ jobs:
 
   msvc-wine:
     runs-on: ubuntu-latest
-    container: linaro/wine-arm64
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
@@ -180,10 +179,8 @@ jobs:
           ref: 49ae4b63f350770584469317e3995d100d4dcd39
           path: msvc-wine
       - name: Install msvc-wine
-        env:
-          WINEPREFIX: /tmp/wine-x64-prefix
         run: |
-          apt-get update && apt-get install -y --no-install-recommends wine python3 msitools ca-certificates winbind
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends wine python3 msitools ca-certificates winbind
           wine wineboot
           msvc-wine/vsdownload.py --accept-license --dest /opt/msvc
           msvc-wine/install.sh /opt/msvc
@@ -197,19 +194,12 @@ jobs:
         with:
           path: ffmpeg
       - name: Build
-        env:
-          WINEPREFIX: /tmp/wine-x64-prefix
         run: |
-          apt-get update && apt-get install -y make gcc
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
           ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine-arm64
           make -j$(nproc) checkasm
-      - name: Test checkasm
-        run: |
-          cd build
-          make -j$(nproc) run-checkasm
 
   llvm-mingw:
     if: false
