@@ -173,6 +173,9 @@ jobs:
     runs-on: ubuntu-latest
     container: linaro/wine-arm64
     steps:
+      - name: Check logs
+        run: |
+          dmesg
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
         with:
@@ -206,6 +209,10 @@ jobs:
           export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
           ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --target-exec=wine-arm64
           make -j$(nproc) checkasm
+      - name: Check logs
+        if: always()
+        run: |
+          dmesg
       - name: Test checkasm
         run: |
           cd build
