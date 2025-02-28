@@ -38,15 +38,26 @@ function ff_ac3_exponent_min_neon, export=1
 endfunc
 
 function ff_ac3_extract_exponents_neon, export=1
-        movi            v1.4s, #8
-1:      ld1             {v0.4s}, [x1], #16
+        movi            v4.16b, #8
+1:      ld1             {v0.4s - v3.4s}, [x1], #64
+        subs            w2, w2, #16
         abs             v0.4s, v0.4s
+        abs             v1.4s, v1.4s
+        abs             v2.4s, v2.4s
+        abs             v3.4s, v3.4s
+
         clz             v0.4s, v0.4s
-        sub             v0.4s, v0.4s, v1.4s
-        xtn             v0.4h, v0.4s
-        xtn             v0.8b, v0.8h
-        st1             {v0.s}[0], [x0], #4
-        subs            w2, w2, #4
+        clz             v1.4s, v1.4s
+        clz             v2.4s, v2.4s
+        clz             v3.4s, v3.4s
+
+        uzp1            v0.8h, v0.8h, v1.8h
+        uzp1            v2.8h, v2.8h, v3.8h
+        uzp1            v0.16b, v0.16b, v2.16b
+        sub             v0.16b, v0.16b, v4.16b
+
+        st1             {v0.16b}, [x0], #16
+
         b.gt            1b
         ret
 endfunc
