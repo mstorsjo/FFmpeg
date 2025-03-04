@@ -170,7 +170,7 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
