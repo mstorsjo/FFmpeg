@@ -170,7 +170,8 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container: debian:bookworm
     steps:
       - name: Checkout msvc-wine
         uses: actions/checkout@v4
@@ -179,8 +180,10 @@ jobs:
           ref: 49ae4b63f350770584469317e3995d100d4dcd39
           path: msvc-wine
       - name: Install msvc-wine
+        env:
+          WINEPREFIX: /tmp/wine-x64-prefix
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends wine python3 msitools ca-certificates winbind
+          apt-get update && apt-get install -y --no-install-recommends wine python3 msitools ca-certificates winbind
           wine wineboot
           msvc-wine/vsdownload.py --accept-license --dest /opt/msvc
           msvc-wine/install.sh /opt/msvc
@@ -194,7 +197,10 @@ jobs:
         with:
           path: ffmpeg
       - name: Build
+        env:
+          WINEPREFIX: /tmp/wine-x64-prefix
         run: |
+          apt-get update && apt-get install -y make gcc
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:/opt/msvc/bin/arm64:$PATH
