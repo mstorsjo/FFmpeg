@@ -181,10 +181,14 @@ jobs:
           path: msvc-wine
       - name: Install wine
         run: |
-          apt-get update && apt-get install -y --no-install-recommends build-essential git ca-certificates flex bison
-          git clone https://gitlab.winehq.org/wine/wine.git
+          apt-get update && apt-get install -y --no-install-recommends build-essential git ca-certificates flex bison quilt autoconf automake
+          git clone https://salsa.debian.org/wine-team/wine
           cd wine
-          git checkout wine-8.0
+          git checkout debian/8.0_repack-4
+          rm debian/patches/generate/*
+          rm debian/patches/debianization/*
+          while QUILT_PATCHES=debian/patches quilt push; do true; done
+          autoreconf
           cd ..
           mkdir wine-build
           cd wine-build
