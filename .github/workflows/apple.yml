@@ -9,10 +9,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-12, version: 10.6 }
-          - { runner: macos-12, version: 10.9 }
-          - { runner: macos-12, version: 10.12 }
-          - { runner: macos-12, version: 10.15 }
+          - { runner: macos-13, version: 10.6 }
+          - { runner: macos-13, version: 10.9 }
+          - { runner: macos-13, version: 10.12 }
+          - { runner: macos-13, version: 10.15 }
           - { runner: macos-14, version: 11.0 }
           - { runner: macos-14, version: 12.0 }
           - { runner: macos-14, version: 13.0 }
@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{matrix.runner}}
     steps:
       - name: Install prerequisites
-        if: ${{matrix.runner == 'macos-12'}}
+        if: ${{matrix.runner == 'macos-13'}}
         run: |
           brew install nasm
       - uses: actions/checkout@v4
