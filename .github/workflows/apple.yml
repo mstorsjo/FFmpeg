@@ -49,8 +49,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          # TODO: --disable-outdev=audiotoolbox should not be needed
-          ../configure --enable-gpl --enable-cross-compile --arch=arm64 --target-os=darwin --cc="clang -arch arm64 -miphoneos-version-min=${{matrix.version}} -isysroot $(xcrun --sdk iphoneos --show-sdk-path)" --disable-outdev=audiotoolbox
+          ../configure --enable-gpl --enable-cross-compile --arch=arm64 --target-os=darwin --cc="clang -arch arm64 -miphoneos-version-min=${{matrix.version}} -isysroot $(xcrun --sdk iphoneos --show-sdk-path)"
           make -j$(sysctl -n hw.ncpu)
 
   tvos:
@@ -71,6 +70,5 @@ jobs:
         run: |
           mkdir build
           cd build
-          # TODO: --disable-outdev=audiotoolbox should not be needed
-          ../configure --enable-gpl --enable-cross-compile --arch=arm64 --target-os=darwin --cc="clang -arch arm64 -mtvos-version-min=${{matrix.version}} -isysroot $(xcrun --sdk appletvos --show-sdk-path)" --disable-outdev=audiotoolbox
+          ../configure --enable-gpl --enable-cross-compile --arch=arm64 --target-os=darwin --cc="clang -arch arm64 -mtvos-version-min=${{matrix.version}} -isysroot $(xcrun --sdk appletvos --show-sdk-path)"
           make -j$(sysctl -n hw.ncpu)
