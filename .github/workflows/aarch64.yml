@@ -334,6 +334,20 @@ jobs:
           ../ffmpeg/configure --arch=${{matrix.arch}} --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
+          make -j$(nproc) ffmpeg.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msvc-${{matrix.arch}}
+          path: |
+            build/ffbuild/config.log
+            build/ffbuild/config.mak
+            build/ffmpeg.exe
+            build/tests/checkasm/checkasm.exe
+          retention-days: 7
+      - name: Run tests
+        shell: msys2 {0}
+        run: |
+          cd build
           make -j$(nproc) fate-rsync
           make V=1 tests/data/hls-list.m3u8
           make -j$(nproc) fate
