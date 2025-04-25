@@ -244,13 +244,15 @@ jobs:
           make -j$(nproc) run-checkasm
 
   msvc:
-    if: false
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     steps:
+      - name: Avoid git checking out files with CRLF
+        run: |
+          git config --global core.autocrlf false
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm64
+          arch: arm64
       - name: Checkout gas-preprocessor
         uses: actions/checkout@v4
         with:
@@ -266,14 +268,20 @@ jobs:
           path-type: inherit
           install: >-
             make
+            rsync
+            diffutils
       - name: Build
         shell: msys2 {0}
         run: |
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
+          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples
           make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
+          make -j$(nproc) run-checkasm
 
   indent:
     runs-on: ubuntu-latest
