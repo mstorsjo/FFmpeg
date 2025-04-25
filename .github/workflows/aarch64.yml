@@ -226,6 +226,12 @@ jobs:
 
   llvm-mingw-native:
     runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - armv7
+          - aarch64
     defaults:
       run:
         shell: msys2 {0}
@@ -256,7 +262,7 @@ jobs:
           export PATH=/llvm-mingw/bin:$PATH
           mkdir build
           cd build
-          ../configure --arch=aarch64 --enable-gpl --samples=../samples
+          ../configure --arch=${{matrix.arch}} --enable-gpl --samples=../samples --cc=${{matrix.arch}}-w64-mingw32-clang --windres=${{matrix.arch}}-w64-mingw32-windres
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
           make -j$(nproc) fate-rsync
@@ -265,6 +271,12 @@ jobs:
 
   msvc:
     runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tool_arch: arm64,     arch: arm64 }
+          - { tool_arch: arm64_arm, arch: arm }
     steps:
       - name: Avoid git checking out files with CRLF
         run: |
@@ -272,7 +284,8 @@ jobs:
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: arm64
+          sdk: 10.0.22621.0 # This is the last one that has ARM
+          arch: ${{matrix.tool_arch}}
       - name: Checkout gas-preprocessor
         uses: actions/checkout@v4
         with:
@@ -296,7 +309,7 @@ jobs:
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples
+          ../ffmpeg/configure --arch=${{matrix.arch}} --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples --disable-indev=vfwcap
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
           make -j$(nproc) fate-rsync
