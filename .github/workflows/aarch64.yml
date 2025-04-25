@@ -226,12 +226,12 @@ jobs:
           make -j$(nproc) run-checkasm
 
   msvc:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     steps:
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm64
+          arch: arm64
       - name: Checkout gas-preprocessor
         uses: actions/checkout@v4
         with:
@@ -247,7 +247,7 @@ jobs:
           path-type: inherit
           install: >-
             make
-      - name: Build
+      - name: Build and test checkasm
         shell: msys2 {0}
         run: |
           mkdir build
@@ -255,6 +255,7 @@ jobs:
           export PATH=$(pwd)/../gas-preprocessor:$PATH
           ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
           make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
 
   indent:
     runs-on: ubuntu-latest
