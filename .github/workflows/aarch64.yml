@@ -225,6 +225,36 @@ jobs:
           make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
+  llvm-mingw-native:
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          install: >-
+            unzip
+            make
+      - name: Install llvm-mingw
+        run: |
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-aarch64.zip
+          unzip -q llvm-mingw-*.zip
+          rm llvm-mingw-*.zip
+          mv llvm-mingw-* /llvm-mingw
+          echo /llvm-mingw/bin >> $GITHUB_PATH
+      - name: Build and test checkasm
+        shell: msys2 {0}
+        run: |
+          export PATH=/llvm-mingw/bin:$PATH
+          mkdir build
+          cd build
+          ../configure --arch=aarch64 --enable-gpl
+          make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
+
   msvc:
     runs-on: windows-11-arm
     steps:
