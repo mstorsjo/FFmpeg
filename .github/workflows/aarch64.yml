@@ -245,6 +245,12 @@ jobs:
 
   llvm-mingw-native:
     runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - armv7
+          - aarch64
     defaults:
       run:
         shell: msys2 {0}
@@ -277,7 +283,7 @@ jobs:
           export PATH=/llvm-mingw/bin:$PATH
           mkdir build
           cd build
-          ../configure --arch=aarch64 --enable-gpl --samples=../samples
+          ../configure --arch=${{matrix.arch}} --enable-gpl --samples=../samples --cc=${{matrix.arch}}-w64-mingw32-clang --windres=${{matrix.arch}}-w64-mingw32-windres
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
           make -j$(nproc) fate-rsync
