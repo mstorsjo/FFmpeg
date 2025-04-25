@@ -331,7 +331,7 @@ jobs:
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure --arch=${{matrix.arch}} --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples
+          ../ffmpeg/configure --arch=${{matrix.arch}} --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples --disable-indev=vfwcap
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
           make -j$(nproc) ffmpeg.exe
