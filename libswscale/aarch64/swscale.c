@@ -168,6 +168,16 @@ void ff_yuv2plane1_8_neon(
         const uint8_t *dither,
         int offset);
 
+void ff_yuv2nv12cX_notswapped_neon(enum AVPixelFormat dstFormat, const uint8_t *chrDither,
+    const int16_t *chrFilter, int chrFilterSize,
+    const int16_t **chrUSrc, const int16_t **chrVSrc,
+    uint8_t *dest, int chrDstW);
+
+void ff_yuv2nv12cX_swapped_neon(enum AVPixelFormat dstFormat, const uint8_t *chrDither,
+    const int16_t *chrFilter, int chrFilterSize,
+    const int16_t **chrUSrc, const int16_t **chrVSrc,
+    uint8_t *dest, int chrDstW);
+
 #define ASSIGN_SCALE_FUNC2(hscalefn, filtersize, opt) do {              \
     if (c->srcBpc == 8) {                                               \
         if(c->dstBpc <= 14) {                                           \
@@ -200,6 +210,12 @@ void ff_yuv2plane1_8_neon(
     case 8: vscalefn = ff_yuv2plane1_8_  ## opt;  break;                \
     default: break;                                                     \
     }
+
+#define ASSIGN_YUV2NV12_FUNC(yuv2nv12fn, opt, dstFormat)               \
+    if(!isSwappedChroma(dstFormat))                                    \
+        yuv2nv12fn = ff_yuv2nv12cX_notswapped_  ## opt;                \
+    else                                                               \
+        yuv2nv12fn = ff_yuv2nv12cX_swapped_  ## opt;
 
 #define NEON_INPUT(name) \
 void ff_##name##ToY_neon(uint8_t *dst, const uint8_t *src, const uint8_t *, \
@@ -275,7 +291,10 @@ av_cold void ff_sws_init_swscale_aarch64(SwsInternal *c)
         ASSIGN_VSCALE_FUNC(c->yuv2plane1, neon);
         if (c->dstBpc == 8) {
             c->yuv2planeX = ff_yuv2planeX_8_neon;
+            if(isSemiPlanarYUV(c->opts.dst_format))
+               ASSIGN_YUV2NV12_FUNC(c->yuv2nv12cX, neon, c->opts.dst_format);
         }
+
         switch (c->opts.src_format) {
         case AV_PIX_FMT_ABGR:
             c->lumToYV12 = ff_abgr32ToY_neon;

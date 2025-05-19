@@ -226,3 +226,309 @@ function ff_yuv2plane1_8_neon, export=1
         b.gt            2b                              // loop until width consumed
         ret
 endfunc
+
+function ff_yuv2nv12cX_notswapped_neon, export=1
+// x0 - dstFormat (unused)
+// x1 - uint8_t *chrDither
+// x2 - int16_t *chrFilter
+// x3 - int chrFilterSize
+// x4 - int16_t **chrUSrc
+// x5 - int16_t **chrVSrc
+// x6 - uint8_t *dest
+// x7 - int chrDstW
+
+        // Load dither pattern and compute U and V dither vectors
+        ld1             {v0.8b}, [x1]                   // chrDither[0..7]
+        ext             v1.8b, v0.8b, v0.8b, #3         // Rotate for V: (i+3)&7
+
+        uxtl            v0.8h, v0.8b
+        uxtl            v1.8h, v1.8b
+
+        ushll           v2.4s, v0.4h, #12               // U dither low
+        ushll2          v3.4s, v0.8h, #12               // U dither high
+        ushll           v4.4s, v1.4h, #12               // V dither low
+        ushll2          v5.4s, v1.8h, #12               // V dither high
+
+        // Check if we can process 16 pixels at a time
+        tst             w7, #15                         // Check if chrDstW % 16 == 0
+        b.ne            .Lprocess_8_pixels              // If not, use 8-pixel version
+
+        // =============================================
+        // 16-pixel processing path
+        // =============================================
+        mov             x8, #0                          // i = 0
+.Lloop_16_pixels:
+
+        mov             v16.16b, v2.16b                 // U acc low
+        mov             v17.16b, v3.16b                 // U acc high
+        mov             v18.16b, v4.16b                 // V acc low
+        mov             v19.16b, v5.16b                 // V acc high
+
+        mov             v20.16b, v2.16b
+        mov             v21.16b, v3.16b
+        mov             v22.16b, v4.16b
+        mov             v23.16b, v5.16b
+
+        mov             w9, w3                          // chrFilterSize counter
+        mov             x10, x2                         // chrFilter pointer
+        mov             x11, x4                         // chrUSrc base
+        mov             x12, x5                         // chrVSrc base
+
+.Lfilter_loop_16:
+        ldr             h6, [x10], #2                   // Load filter coefficient
+
+        ldr             x13, [x11], #8                  // chrUSrc[j]
+        ldr             x14, [x12], #8                  // chrVSrc[j]
+        add             x13, x13, x8, lsl #1            // &chrUSrc[j][i]
+        add             x14, x14, x8, lsl #1            // &chrVSrc[j][i]
+        add             x15, x13, #16                   // x15 = &chrUSrc[j][i+8] (8 samples * 2 bytes)
+        add             x16, x14, #16
+
+        ld1             {v24.8h}, [x13]                 // U samples 0-7
+        ld1             {v25.8h}, [x14]                 // V samples 0-7
+
+        ld1             {v26.8h}, [x15]                 // U samples 8-15
+        ld1             {v27.8h}, [x16]                 // V samples 8-15
+
+        smlal           v16.4s, v24.4h, v6.h[0]
+        smlal2          v17.4s, v24.8h, v6.h[0]
+        smlal           v18.4s, v25.4h, v6.h[0]
+        smlal2          v19.4s, v25.8h, v6.h[0]
+
+        smlal           v20.4s, v26.4h, v6.h[0]
+        smlal2          v21.4s, v26.8h, v6.h[0]
+        smlal           v22.4s, v27.4h, v6.h[0]
+        smlal2          v23.4s, v27.8h, v6.h[0]
+
+        subs            w9, w9, #1
+        b.gt            .Lfilter_loop_16
+
+        // Process and store first 8 pixels
+        sqshrun         v28.4h, v16.4s, #16
+        sqshrun2        v28.8h, v17.4s, #16
+        sqshrun         v29.4h, v18.4s, #16
+        sqshrun2        v29.8h, v19.4s, #16
+        uqshrn          v30.8b, v28.8h, #3              // U
+        uqshrn          v31.8b, v29.8h, #3              // V
+
+        // Process and store next 8 pixels
+        sqshrun         v28.4h, v20.4s, #16
+        sqshrun2        v28.8h, v21.4s, #16
+        sqshrun         v29.4h, v22.4s, #16
+        sqshrun2        v29.8h, v23.4s, #16
+        uqshrn          v24.8b, v28.8h, #3              // U
+        uqshrn          v25.8b, v29.8h, #3              // V
+
+        // Store both 8-pixel blocks
+        st2             {v30.8b, v31.8b}, [x6], #16
+        st2             {v24.8b, v25.8b}, [x6], #16
+
+        subs            w7, w7, #16
+        add             x8, x8, #16
+        b.gt            .Lloop_16_pixels
+        ret
+
+        // =============================================
+        // 8-pixel processing path (original code)
+        // =============================================
+.Lprocess_8_pixels:
+        mov             x8, #0                        // i = 0
+.Lloop_8_pixels:
+        // Initialize accumulators with dither
+        mov             v16.16b, v2.16b               // U acc low
+        mov             v17.16b, v3.16b               // U acc high
+        mov             v18.16b, v4.16b               // V acc low
+        mov             v19.16b, v5.16b               // V acc high
+
+        mov             w9, w3                        // chrFilterSize counter
+        mov             x10, x2                       // chrFilter pointer
+        mov             x11, x4                       // chrUSrc base
+        mov             x12, x5                       // chrVSrc base
+
+.Lfilter_loop_8:
+        ldr             h6, [x10], #2                 // Load filter coefficient
+
+        ldr             x13, [x11], #8                // chrUSrc[j]
+        ldr             x14, [x12], #8                // chrVSrc[j]
+        add             x13, x13, x8, lsl #1          // &chrUSrc[j][i]
+        add             x14, x14, x8, lsl #1          // &chrVSrc[j][i]
+
+        ld1             {v20.8h}, [x13]               // U samples
+        ld1             {v21.8h}, [x14]               // V samples
+
+        smlal           v16.4s, v20.4h, v6.h[0]
+        smlal2          v17.4s, v20.8h, v6.h[0]
+        smlal           v18.4s, v21.4h, v6.h[0]
+        smlal2          v19.4s, v21.8h, v6.h[0]
+
+        subs            w9, w9, #1
+        b.gt            .Lfilter_loop_8
+
+        // Final processing and store
+        sqshrun         v26.4h, v16.4s, #16
+        sqshrun2        v26.8h, v17.4s, #16
+        sqshrun         v27.4h, v18.4s, #16
+        sqshrun2        v27.8h, v19.4s, #16
+        uqshrn          v28.8b, v26.8h, #3            // U
+        uqshrn          v29.8b, v27.8h, #3            // V
+
+        st2             {v28.8b, v29.8b}, [x6], #16
+
+        subs            w7, w7, #8
+        add             x8, x8, #8
+        b.gt            .Lloop_8_pixels
+        ret
+endfunc
+
+function ff_yuv2nv12cX_swapped_neon, export=1
+// x0 - dstFormat (unused)
+// x1 - uint8_t *chrDither
+// x2 - int16_t *chrFilter
+// x3 - int chrFilterSize
+// x4 - int16_t **chrUSrc
+// x5 - int16_t **chrVSrc
+// x6 - uint8_t *dest
+// x7 - int chrDstW
+
+        // Load dither pattern and compute U and V dither vectors
+        ld1             {v0.8b}, [x1]                   // chrDither[0..7]
+        ext             v1.8b, v0.8b, v0.8b, #3         // Rotate for V: (i+3)&7
+
+        uxtl            v0.8h, v0.8b
+        uxtl            v1.8h, v1.8b
+
+        ushll           v2.4s, v0.4h, #12               // U dither low
+        ushll2          v3.4s, v0.8h, #12               // U dither high
+        ushll           v4.4s, v1.4h, #12               // V dither low
+        ushll2          v5.4s, v1.8h, #12               // V dither high
+
+        // Check if we can process 16 pixels at a time
+        tst             w7, #15                         // Check if chrDstW % 16 == 0
+        b.ne            .Lprocess_swapped_8_pixels              // If not, use 8-pixel version
+
+        // =============================================
+        // 16-pixel processing path
+        // =============================================
+        mov             x8, #0                          // i = 0
+.Lloop_swapped_16_pixels:
+
+        mov             v16.16b, v2.16b                 // U acc low
+        mov             v17.16b, v3.16b                 // U acc high
+        mov             v18.16b, v4.16b                 // V acc low
+        mov             v19.16b, v5.16b                 // V acc high
+
+        mov             v20.16b, v2.16b
+        mov             v21.16b, v3.16b
+        mov             v22.16b, v4.16b
+        mov             v23.16b, v5.16b
+
+        mov             w9, w3                          // chrFilterSize counter
+        mov             x10, x2                         // chrFilter pointer
+        mov             x11, x4                         // chrUSrc base
+        mov             x12, x5                         // chrVSrc base
+
+.Lfilter_swapped_loop_16:
+        ldr             h6, [x10], #2                   // Load filter coefficient
+
+        ldr             x13, [x11], #8                  // chrUSrc[j]
+        ldr             x14, [x12], #8                  // chrVSrc[j]
+        add             x13, x13, x8, lsl #1            // &chrUSrc[j][i]
+        add             x14, x14, x8, lsl #1            // &chrVSrc[j][i]
+        add             x15, x13, #16                   // x15 = &chrUSrc[j][i+8] (8 samples * 2 bytes)
+        add             x16, x14, #16
+
+        ld1             {v24.8h}, [x13]                 // U samples 0-7
+        ld1             {v25.8h}, [x14]                 // V samples 0-7
+
+        ld1             {v26.8h}, [x15]                 // U samples 8-15
+        ld1             {v27.8h}, [x16]                 // V samples 8-15
+
+        smlal           v16.4s, v24.4h, v6.h[0]
+        smlal2          v17.4s, v24.8h, v6.h[0]
+        smlal           v18.4s, v25.4h, v6.h[0]
+        smlal2          v19.4s, v25.8h, v6.h[0]
+
+        smlal           v20.4s, v26.4h, v6.h[0]
+        smlal2          v21.4s, v26.8h, v6.h[0]
+        smlal           v22.4s, v27.4h, v6.h[0]
+        smlal2          v23.4s, v27.8h, v6.h[0]
+
+        subs            w9, w9, #1
+        b.gt            .Lfilter_swapped_loop_16
+
+        // Process and store first 8 pixels
+        sqshrun         v28.4h, v16.4s, #16
+        sqshrun2        v28.8h, v17.4s, #16
+        sqshrun         v29.4h, v18.4s, #16
+        sqshrun2        v29.8h, v19.4s, #16
+        uqshrn          v30.8b, v29.8h, #3              // V
+        uqshrn          v31.8b, v28.8h, #3              // U
+
+        // Process and store next 8 pixels
+        sqshrun         v28.4h, v20.4s, #16
+        sqshrun2        v28.8h, v21.4s, #16
+        sqshrun         v29.4h, v22.4s, #16
+        sqshrun2        v29.8h, v23.4s, #16
+        uqshrn          v24.8b, v29.8h, #3              // V
+        uqshrn          v25.8b, v28.8h, #3              // U
+
+        // Store both 8-pixel blocks
+        st2             {v30.8b, v31.8b}, [x6], #16
+        st2             {v24.8b, v25.8b}, [x6], #16
+
+        subs            w7, w7, #16
+        add             x8, x8, #16
+        b.gt            .Lloop_swapped_16_pixels
+        ret
+
+        // =============================================
+        // 8-pixel processing path (original code)
+        // =============================================
+.Lprocess_swapped_8_pixels:
+        mov             x8, #0                        // i = 0
+.Lloop_swapped_8_pixels:
+        // Initialize accumulators with dither
+        mov             v16.16b, v2.16b               // U acc low
+        mov             v17.16b, v3.16b               // U acc high
+        mov             v18.16b, v4.16b               // V acc low
+        mov             v19.16b, v5.16b               // V acc high
+
+        mov             w9, w3                        // chrFilterSize counter
+        mov             x10, x2                       // chrFilter pointer
+        mov             x11, x4                       // chrUSrc base
+        mov             x12, x5                       // chrVSrc base
+
+.Lfilter_swapped_loop_8:
+        ldr             h6, [x10], #2                 // Load filter coefficient
+
+        ldr             x13, [x11], #8                // chrUSrc[j]
+        ldr             x14, [x12], #8                // chrVSrc[j]
+        add             x13, x13, x8, lsl #1          // &chrUSrc[j][i]
+        add             x14, x14, x8, lsl #1          // &chrVSrc[j][i]
+
+        ld1             {v20.8h}, [x13]               // U samples
+        ld1             {v21.8h}, [x14]               // V samples
+
+        smlal           v16.4s, v20.4h, v6.h[0]
+        smlal2          v17.4s, v20.8h, v6.h[0]
+        smlal           v18.4s, v21.4h, v6.h[0]
+        smlal2          v19.4s, v21.8h, v6.h[0]
+
+        subs            w9, w9, #1
+        b.gt            .Lfilter_swapped_loop_8
+
+        // Final processing and store
+        sqshrun         v26.4h, v16.4s, #16
+        sqshrun2        v26.8h, v17.4s, #16
+        sqshrun         v27.4h, v18.4s, #16
+        sqshrun2        v27.8h, v19.4s, #16
+        uqshrn          v28.8b, v27.8h, #3            // V
+        uqshrn          v29.8b, v26.8h, #3            // U
+
+        st2             {v28.8b, v29.8b}, [x6], #16
+
+        subs            w7, w7, #8
+        add             x8, x8, #8
+        b.gt            .Lloop_swapped_8_pixels
+        ret
+endfunc
