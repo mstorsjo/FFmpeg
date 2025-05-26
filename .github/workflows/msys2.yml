@@ -34,6 +34,7 @@ jobs:
           pacboy: >-
             toolchain:p
             nasm:p
+            ${{startsWith(matrix.msystem, 'clang') && 'gcc-compat:p' || ''}}
       - uses: actions/checkout@v4
       - name: Build
         run: |
