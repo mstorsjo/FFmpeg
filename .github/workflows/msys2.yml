@@ -12,7 +12,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { runner: 'windows-latest', msystem: mingw32 }
+          - { runner: 'windows-latest', msystem: mingw64 }
           - { runner: 'windows-latest', msystem: clang64 }
+          - { runner: 'windows-11-arm', msystem: mingw64 }
           - { runner: 'windows-11-arm', msystem: clangarm64 }
     runs-on: ${{matrix.runner}}
     steps:
