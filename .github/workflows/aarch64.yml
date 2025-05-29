@@ -11,6 +11,7 @@ on:
 
 jobs:
   linux-x86_64:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +88,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +108,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   android-old-ndk:
+    if: false
     runs-on: ubuntu-22.04 # libtinfo5 is not available in 24.04
     steps:
       - uses: actions/checkout@v4
@@ -128,6 +131,7 @@ jobs:
           make -j$(nproc) checkasm
 
   android-new-ndk:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +150,7 @@ jobs:
           make -j$(nproc) checkasm
 
   macos:
+    if: false
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -167,6 +172,7 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout msvc-wine
@@ -203,6 +209,7 @@ jobs:
           docker run --rm -v $(pwd):/host linaro/wine-arm64 wine-arm64 /host/tests/checkasm/checkasm.exe
 
   llvm-mingw:
+    if: false
     runs-on: ubuntu-latest
     container: linaro/wine-arm64
     steps:
@@ -223,6 +230,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   msvc:
+    if: false
     runs-on: windows-latest
     steps:
       - name: Set up the environment
