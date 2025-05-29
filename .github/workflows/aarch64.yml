@@ -245,6 +245,9 @@ jobs:
   msvc:
     runs-on: windows-11-arm
     steps:
+      - name: Avoid git checking out files with CRLF
+        run: |
+          git config --global core.autocrlf false
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -264,14 +267,19 @@ jobs:
           path-type: inherit
           install: >-
             make
-      - name: Build and test checkasm
+            rsync
+            diffutils
+      - name: Build and run all tests
         shell: msys2 {0}
         run: |
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
+          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl --samples=../samples
           make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   indent:
