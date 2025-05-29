@@ -218,6 +218,10 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      - name: Avoid git checking out files with CRLF
+        shell: cmd
+        run: |
+          git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
         with:
@@ -225,6 +229,8 @@ jobs:
           install: >-
             unzip
             make
+            rsync
+            diffutils
       - name: Install llvm-mingw
         run: |
           curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-aarch64.zip
@@ -232,14 +238,17 @@ jobs:
           rm llvm-mingw-*.zip
           mv llvm-mingw-* /llvm-mingw
           echo /llvm-mingw/bin >> $GITHUB_PATH
-      - name: Build and test checkasm
+      - name: Build and run all tests
         shell: msys2 {0}
         run: |
           export PATH=/llvm-mingw/bin:$PATH
           mkdir build
           cd build
-          ../configure --arch=aarch64 --enable-gpl
+          ../configure --arch=aarch64 --enable-gpl --samples=../samples
           make -j$(nproc) checkasm
+          make -j$(nproc) run-checkasm
+          make -j$(nproc) fate-rsync
+          make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
   msvc:
