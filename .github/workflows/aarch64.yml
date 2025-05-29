@@ -56,20 +56,11 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-pacbti:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
       - name: Set up Fedora cross sysroot
         run: |
-          # docker run --rm -v $PWD:/host arm64v8/fedora:35 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
-          # This takes 14 minutes when run in QEMU, but takes 1 minute when run natively
-          # on an actual aarch64 linux machine. Thus skip it and fetch a premade tarball
-          # instead.
-          curl -LO https://martin.st/temp/fedora35-aarch64-sysroot.tar.xz
-          xz -d fedora*.tar.xz
+          docker run --rm -v $PWD:/host fedora:35 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
           mkdir -p /opt/fedora-sysroot
           tar -C /opt/fedora-sysroot -xf fedora*.tar
           rm fedora*.tar
@@ -78,13 +69,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and test checkasm
         run: |
-          sudo apt-get update && sudo apt-get install binutils-aarch64-linux-gnu clang
-          # Using the QEMU installed by setup-qemu-action above, via binfmt, so no
-          # --target-exec is needed, but point to the sysroot with QEMU_LD_PREFIX.
-          export QEMU_LD_PREFIX=/opt/fedora-sysroot
+          sudo apt-get update && sudo apt-get install clang qemu-user-static
           mkdir build
           cd build
-          ../configure --arch=aarch64 --cross-prefix=aarch64-linux-gnu- --target-os=linux --cc="clang -target aarch64-linux-gnu" --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -Wl,-z,force-bti -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl
+          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -Wl,-z,force-bti -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl --target-exec="qemu-aarch64-static -L /opt/fedora-sysroot"
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
