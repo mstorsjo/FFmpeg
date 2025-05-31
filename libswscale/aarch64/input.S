@@ -22,9 +22,9 @@
 
 .macro rgb_to_yuv_load_rgb src, element=3
     .if \element == 3
-        ld3             { v16.16b, v17.16b, v18.16b }, [\src]
+        ld3             { v16.16b, v17.16b, v18.16b }, [\src], #48
     .else
-        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [\src]
+        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [\src], #64
     .endif
         uxtl            v19.8h, v16.8b             // v19: r
         uxtl            v20.8h, v17.8b             // v20: g
@@ -35,7 +35,7 @@
 .endm
 
 .macro argb_to_yuv_load_rgb src
-        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [\src]
+        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [\src], #64
         uxtl            v21.8h, v19.8b             // v21: b
         uxtl2           v24.8h, v19.16b            // v24: b
         uxtl            v19.8h, v17.8b             // v19: r
@@ -57,20 +57,41 @@
         sqshrn2         \dst\().8h, \dst2\().4s, \right_shift   // dst_higher_half = dst2 >> right_shift
 .endm
 
+// interleaved product version of the rgb to yuv gives slightly better performance on non-performant mobile cores
+.macro rgb_to_uv_interleaved_product r, g, b, u_coef0, u_coef1, u_coef2, v_coef0, v_coef1, v_coef2, u_dst1, u_dst2, v_dst1, v_dst2, u_dst, v_dst, right_shift
+        smlal           \u_dst1\().4s, \u_coef0\().4h, \r\().4h     // U += ru * r (first 4)
+        smlal           \v_dst1\().4s, \v_coef0\().4h, \r\().4h     // V += rv * r (first 4)
+        smlal2          \u_dst2\().4s, \u_coef0\().8h, \r\().8h     // U += ru * r (second 4)
+        smlal2          \v_dst2\().4s, \v_coef0\().8h, \r\().8h     // V += rv * r (second 4)
+
+        smlal           \u_dst1\().4s, \u_coef1\().4h, \g\().4h     // U += gu * g (first 4)
+        smlal           \v_dst1\().4s, \v_coef1\().4h, \g\().4h     // V += gv * g (first 4)
+        smlal2          \u_dst2\().4s, \u_coef1\().8h, \g\().8h     // U += gu * g (second 4)
+        smlal2          \v_dst2\().4s, \v_coef1\().8h, \g\().8h     // V += gv * g (second 4)
+
+        smlal           \u_dst1\().4s, \u_coef2\().4h, \b\().4h     // U += bu * b (first 4)
+        smlal           \v_dst1\().4s, \v_coef2\().4h, \b\().4h     // V += bv * b (first 4)
+        smlal2          \u_dst2\().4s, \u_coef2\().8h, \b\().8h     // U += bu * b (second 4)
+        smlal2          \v_dst2\().4s, \v_coef2\().8h, \b\().8h     // V += bv * b (second 4)
+
+        sqshrn          \u_dst\().4h, \u_dst1\().4s, \right_shift   // U first 4 pixels
+        sqshrn2         \u_dst\().8h, \u_dst2\().4s, \right_shift   // U all 8 pixels
+        sqshrn          \v_dst\().4h, \v_dst1\().4s, \right_shift   // V first 4 pixels
+        sqshrn2         \v_dst\().8h, \v_dst2\().4s, \right_shift   // V all 8 pixels
+.endm
+
 .macro rgbToY_neon fmt_bgr, fmt_rgb, element, alpha_first=0
 function ff_\fmt_bgr\()ToY_neon, export=1
-        cmp             w4, #0                  // check width > 0
+        cbz             w4, 3f                  // check width > 0
         ldp             w12, w11, [x5]          // w12: ry, w11: gy
         ldr             w10, [x5, #8]           // w10: by
-        b.gt            4f
-        ret
+        b               4f
 endfunc
 
 function ff_\fmt_rgb\()ToY_neon, export=1
-        cmp             w4, #0                  // check width > 0
+        cbz             w4, 3f                  // check width > 0
         ldp             w10, w11, [x5]          // w10: ry, w11: gy
         ldr             w12, [x5, #8]           // w12: by
-        b.le            3f
 4:
         mov             w9, #256                // w9 = 1 << (RGB2YUV_SHIFT - 7)
         movk            w9, #8, lsl #16         // w9 += 32 << (RGB2YUV_SHIFT - 1)
@@ -90,7 +111,6 @@ function ff_\fmt_rgb\()ToY_neon, export=1
         rgb_to_yuv_product v19, v20, v21, v25, v26, v16, v0, v1, v2, #9
         rgb_to_yuv_product v22, v23, v24, v27, v28, v17, v0, v1, v2, #9
         sub             w4, w4, #16             // width -= 16
-        add             x1, x1, #(16*\element)
         cmp             w4, #16                 // width >= 16 ?
         stp             q16, q17, [x0], #32     // store to dst
         b.ge            1b
@@ -158,8 +178,7 @@ rgbToY_neon abgr32, argb32, element=4, alpha_first=1
 
 .macro rgbToUV_half_neon fmt_bgr, fmt_rgb, element, alpha_first=0
 function ff_\fmt_bgr\()ToUV_half_neon, export=1
-        cmp             w5, #0          // check width > 0
-        b.le            3f
+        cbz             w5, 3f          // check width > 0
 
         ldp             w12, w11, [x6, #12]
         ldp             w10, w15, [x6, #20]
@@ -168,7 +187,7 @@ function ff_\fmt_bgr\()ToUV_half_neon, export=1
 endfunc
 
 function ff_\fmt_rgb\()ToUV_half_neon, export=1
-        cmp             w5, #0          // check width > 0
+        cmp             w5, #0                  // check width > 0
         b.le            3f
 
         ldp             w10, w11, [x6, #12]     // w10: ru, w11: gu
@@ -178,32 +197,39 @@ function ff_\fmt_rgb\()ToUV_half_neon, export=1
         cmp             w5, #8
         rgb_set_uv_coeff half=1
         b.lt            2f
-1:
+1:  // load 16 pixels
     .if \element == 3
-        ld3             { v16.16b, v17.16b, v18.16b }, [x3]
+        ld3             { v16.16b, v17.16b, v18.16b }, [x3], #48
     .else
-        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [x3]
-    .endif
-    .if \alpha_first
-        uaddlp          v21.8h, v19.16b
-        uaddlp          v20.8h, v18.16b
-        uaddlp          v19.8h, v17.16b
-    .else
-        uaddlp          v19.8h, v16.16b         // v19: r
-        uaddlp          v20.8h, v17.16b         // v20: g
-        uaddlp          v21.8h, v18.16b         // v21: b
+        ld4             { v16.16b, v17.16b, v18.16b, v19.16b }, [x3], #64
     .endif
 
-        rgb_to_yuv_product v19, v20, v21, v22, v23, v16, v0, v1, v2, #10
-        rgb_to_yuv_product v19, v20, v21, v24, v25, v17, v3, v4, v5, #10
-        sub             w5, w5, #8              // width -= 8
-        add             x3, x3, #(16*\element)
-        cmp             w5, #8                  // width >= 8 ?
+    .if \alpha_first
+        uaddlp          v21.8h, v19.16b         // v21: summed b pairs
+        uaddlp          v20.8h, v18.16b         // v20: summed g pairs
+        uaddlp          v19.8h, v17.16b         // v19: summed r pairs
+    .else
+        uaddlp          v19.8h, v16.16b         // v19: summed r pairs
+        uaddlp          v20.8h, v17.16b         // v20: summed g pairs
+        uaddlp          v21.8h, v18.16b         // v21: summed b pairs
+    .endif
+
+        mov             v22.16b, v6.16b         // U first half
+        mov             v23.16b, v6.16b         // U second half
+        mov             v24.16b, v6.16b         // V first half
+        mov             v25.16b, v6.16b         // V second half
+
+        rgb_to_uv_interleaved_product v19, v20, v21, v0, v1, v2, v3, v4, v5, v22, v23, v24, v25, v16, v17, #10
+
         str             q16, [x0], #16          // store dst_u
         str             q17, [x1], #16          // store dst_v
+
+        sub             w5, w5, #8              // width -= 8
+        cmp             w5, #8                  // width >= 8 ?
         b.ge            1b
-        cbz             w5, 3f
-2:
+        cbz             w5, 3f                  // No pixels left? Exit
+
+2:      // Scalar fallback for remaining pixels
 .if \alpha_first
         rgb_load_add_half 1, 5, 2, 6, 3, 7
 .else
@@ -213,21 +239,24 @@ function ff_\fmt_rgb\()ToUV_half_neon, export=1
         rgb_load_add_half 0, 4, 1, 5, 2, 6
     .endif
 .endif
-
         smaddl          x8, w2, w10, x9         // dst_u = ru * r + const_offset
-        smaddl          x8, w4, w11, x8         // dst_u += gu * g
-        smaddl          x8, w7, w12, x8         // dst_u += bu * b
-        asr             x8, x8, #10             // dst_u >>= 10
-        strh            w8, [x0], #2            // store dst_u
+        smaddl          x16, w2, w13, x9        // dst_v = rv * r + const_offset (parallel)
 
-        smaddl          x8, w2, w13, x9         // dst_v = rv * r + const_offset
-        smaddl          x8, w4, w14, x8         // dst_v += gv * g
-        smaddl          x8, w7, w15, x8         // dst_v += bv * b
-        asr             x8, x8, #10             // dst_v >>= 10
-        sub             w5, w5, #1
-        add             x3, x3, #(2*\element)
-        strh            w8, [x1], #2            // store dst_v
-        cbnz            w5, 2b
+        smaddl          x8, w4, w11, x8         // dst_u += gu * g
+        smaddl          x16, w4, w14, x16       // dst_v += gv * g (parallel)
+
+        smaddl          x8, w7, w12, x8         // dst_u += bu * b
+        smaddl          x16, w7, w15, x16       // dst_v += bv * b (parallel)
+
+        asr             w8, w8, #10             // dst_u >>= 10
+        asr             w16, w16, #10           // dst_v >>= 10
+
+        strh            w8, [x0], #2            // store dst_u
+        strh            w16, [x1], #2           // store dst_v
+
+        sub             w5, w5, #1              // width--
+        add             x3, x3, #(2*\element)   // Advance source pointer
+        cbnz            w5, 2b                  // Process next pixel if any left
 3:
         ret
 endfunc
@@ -244,9 +273,9 @@ function ff_\fmt_bgr\()ToUV_neon, export=1
         cmp             w5, #0                  // check width > 0
         b.le            3f
 
-        ldp             w12, w11, [x6, #12]
-        ldp             w10, w15, [x6, #20]
-        ldp             w14, w13, [x6, #28]
+        ldp             w12, w11, [x6, #12]     // bu, gu
+        ldp             w10, w15, [x6, #20]     // ru, bv
+        ldp             w14, w13, [x6, #28]     // gv, rv
         b               4f
 endfunc
 
@@ -267,17 +296,26 @@ function ff_\fmt_rgb\()ToUV_neon, export=1
     .else
         rgb_to_yuv_load_rgb x3, \element
     .endif
-        rgb_to_yuv_product v19, v20, v21, v25, v26, v16, v0, v1, v2, #9
-        rgb_to_yuv_product v22, v23, v24, v27, v28, v17, v0, v1, v2, #9
-        rgb_to_yuv_product v19, v20, v21, v25, v26, v18, v3, v4, v5, #9
-        rgb_to_yuv_product v22, v23, v24, v27, v28, v19, v3, v4, v5, #9
-        sub             w5, w5, #16
-        add             x3, x3, #(16*\element)
-        cmp             w5, #16
-        stp             q16, q17, [x0], #32     // store to dst_u
-        stp             q18, q19, [x1], #32     // store to dst_v
+        // process 2 groups of 8 pixels
+        mov             v25.16b, v6.16b         // U_dst1 = const_offset (32-bit accumulators)
+        mov             v26.16b, v6.16b         // U_dst2 = const_offset
+        mov             v27.16b, v6.16b         // V_dst1 = const_offset
+        mov             v28.16b, v6.16b         // V_dst2 = const_offset
+        rgb_to_uv_interleaved_product v19, v20, v21, v0, v1, v2, v3, v4, v5, v25, v26, v27, v28, v16, v18, #9
+
+        mov             v25.16b, v6.16b
+        mov             v26.16b, v6.16b
+        mov             v27.16b, v6.16b
+        mov             v28.16b, v6.16b
+        rgb_to_uv_interleaved_product v22, v23, v24, v0, v1, v2, v3, v4, v5, v25, v26, v27, v28, v17, v19, #9
+
+        sub             w5, w5, #16             // width -= 16
+        cmp             w5, #16                 // width >= 16 ?
+        stp             q16, q17, [x0], #32     // store to dst_u (post-increment)
+        stp             q18, q19, [x1], #32     // store to dst_v (post-increment)
         b.ge            1b
-        cbz             w5, 3f
+        cbz             w5, 3f                  // No pixels left? Exit
+
 2:
     .if \alpha_first
         ldrb            w16, [x3, #1]           // w16: r
@@ -292,7 +330,7 @@ function ff_\fmt_rgb\()ToUV_neon, export=1
         smaddl          x8, w16, w10, x9        // x8 = ru * r + const_offset
         smaddl          x8, w17, w11, x8        // x8 += gu * g
         smaddl          x8, w4, w12, x8         // x8 += bu * b
-        asr             w8, w8, #9              // x8 >>= 9
+        asr             x8, x8, #9              // x8 >>= 9
         strh            w8, [x0], #2            // store to dst_u
 
         smaddl          x8, w16, w13, x9        // x8 = rv * r + const_offset
@@ -401,3 +439,4 @@ endfunc
 
 DISABLE_DOTPROD
 #endif
+
