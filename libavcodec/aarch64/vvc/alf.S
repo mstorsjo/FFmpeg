@@ -291,3 +291,281 @@ function ff_alf_filter_chroma_kernel_10_neon, export=1
 1:
         alf_filter_chroma_kernel 2
 endfunc
+
+
+
+.macro alf_classify_argvar2v30
+        mov             w16, #0
+        mov             v30.b[0], w16
+        mov             w16, #1
+        mov             v30.b[1], w16
+        mov             w16, #2
+        mov             v30.b[2], w16
+        mov             v30.b[3], w16
+        mov             v30.b[4], w16
+        mov             v30.b[5], w16
+        mov             v30.b[6], w16
+        mov             w16, #3
+        mov             v30.b[7], w16
+        mov             v30.b[8], w16
+        mov             v30.b[9], w16
+        mov             v30.b[10], w16
+        mov             v30.b[11], w16
+        mov             v30.b[12], w16
+        mov             v30.b[13], w16
+        mov             v30.b[14], w16
+        mov             w16, #4
+        mov             v30.b[15], w16
+.endm
+
+.macro alf_classify_load_pixel pix_size, dst, src
+    .if \pix_size == 1
+        ldrb            \dst, [\src], #1
+    .else
+        ldrh            \dst, [\src], #2
+    .endif
+.endm
+
+.macro alf_classify_load_pixel_with_offset pix_size, dst, src, offset
+    .if \pix_size == 1
+        ldrb            \dst, [\src, #(\offset)]
+    .else
+        ldrh            \dst, [\src, #(2*\offset)]
+    .endif
+.endm
+
+#define ALF_BLOCK_SIZE          4
+#define ALF_GRADIENT_STEP       2
+#define ALF_GRADIENT_BORDER     2
+#define ALF_NUM_DIR             4
+#define ALF_GRAD_BORDER_X2      (ALF_GRADIENT_BORDER * 2)
+#define ALF_STRIDE_MUL          (ALF_GRADIENT_BORDER + 1)
+#define ALF_GRAD_X_VSTEP        (ALF_GRADIENT_STEP * 8)
+#define ALF_GSTRIDE_MUL         (ALF_NUM_DIR / ALF_GRADIENT_STEP)
+
+// Shift right: equal to division by 2 (see ALF_GRADIENT_STEP)
+#define ALF_GSTRIDE_XG_BYTES    (2 * ALF_NUM_DIR / ALF_GRADIENT_STEP)
+
+#define ALF_GSTRIDE_SUB_BYTES   (2 * ((ALF_BLOCK_SIZE + ALF_GRADIENT_BORDER * 2) / ALF_GRADIENT_STEP) * ALF_NUM_DIR)
+
+#define ALF_CLASS_INC           (ALF_GRADIENT_BORDER / ALF_GRADIENT_STEP)
+#define ALF_CLASS_END           ((ALF_BLOCK_SIZE + ALF_GRADIENT_BORDER * 2) / ALF_GRADIENT_STEP)
+
+.macro ff_alf_classify_grad pix_size
+        // class_idx     .req x0
+        // transpose_idx .req x1
+        // _src          .req x2
+        // _src_stride   .req x3
+        // width         .req w4
+        // height        .req w5
+        // vb_pos        .req w6
+        // gradient_tmp  .req x7
+
+        mov             w16, #ALF_STRIDE_MUL
+        add             w5, w5, #ALF_GRAD_BORDER_X2 // h = height + 4
+        mul             x16, x3, x16                // 3 * stride
+        add             w4, w4, #ALF_GRAD_BORDER_X2 // w = width + 4
+        sub             x15, x2, x16                // src -= (3 * stride)
+        mov             x17, x7
+    .if \pix_size == 1
+        sub             x15, x15, #ALF_GRADIENT_BORDER
+    .else
+        sub             x15, x15, #4
+    .endif
+        mov             w8, #0                      // y loop: y = 0
+1:
+        cmp             w8, w5
+        bge             10f
+
+        add             x16, x8, #1
+        mul             x14, x8, x3                 // y * stride
+        mul             x16, x16, x3
+        add             x10, x15, x14               // s0 = src + y * stride
+        add             x14, x16, x3
+        add             x11, x15, x16               // s1
+        add             x16, x14, x3
+        add             x12, x15, x14               // s2
+        add             x13, x15, x16               // s3
+
+        // if (y == vb_pos): s3 = s2
+        cmp             w8, w6
+        add             w16, w6, #ALF_GRADIENT_BORDER
+        csel            x13, x12, x13, eq
+        // if (y == vb_pos + 2): s0 = s1
+        cmp             w8, w16
+        csel            x10, x11, x10, eq
+
+        alf_classify_load_pixel_with_offset \pix_size, w16, x10, -1
+        alf_classify_load_pixel \pix_size, w14, x13
+        mov             v16.h[7], w16
+        mov             v28.h[7], w14
+
+        // load 4 pixels from *(s1-2) & *(s2-2)
+    .if \pix_size == 1
+        sub             x11, x11, #2
+        sub             x12, x12, #2
+        ld1             {v0.8b}, [x11]
+        ld1             {v1.8b}, [x12]
+        uxtl            v17.8h, v0.8b
+        uxtl            v18.8h, v1.8b
+    .else
+        sub             x11, x11, #4
+        sub             x12, x12, #4
+        ld1             {v17.8h}, [x11]
+        ld1             {v18.8h}, [x12]
+    .endif
+        ext             v22.16b, v22.16b, v17.16b, #8
+        ext             v24.16b, v24.16b, v18.16b, #8
+    .if \pix_size == 1
+        add             x11, x11, #4
+        add             x12, x12, #4
+    .else
+        add             x11, x11, #8
+        add             x12, x12, #8
+    .endif
+
+        // x loop
+        mov             w9, #0
+        b               11f
+2:
+        cmp             w9, w4
+        bge             20f
+
+        // Store operation starts from the second cycle
+        st2             {v4.8h, v5.8h}, [x17], #32
+11:
+    .if \pix_size == 1
+        // Load 8 pixels: s0 & s1+2 
+        ld1             {v0.8b}, [x10], #8
+        ld1             {v1.8b}, [x11], #8
+        uxtl            v20.8h, v0.8b
+        uxtl            v26.8h, v1.8b
+        // Load 8 pixels: s2+2 & s3+1 
+        ld1             {v0.8b}, [x12], #8
+        ld1             {v1.8b}, [x13], #8
+        uxtl            v27.8h, v0.8b
+        uxtl            v19.8h, v1.8b
+    .else
+        // Load 8 pixels: s0 
+        ld1             {v20.8h}, [x10], #16
+        // Load 8 pixels: s1+2
+        ld1             {v26.8h}, [x11], #16
+        // Load 8 pixels: s2+2 
+        ld1             {v27.8h}, [x12], #16
+        // Load 8 pixels: s3+1
+        ld1             {v19.8h}, [x13], #16
+    .endif
+
+        ext             v16.16b, v16.16b, v20.16b, #14
+        ext             v28.16b, v28.16b, v19.16b, #14
+
+        ext             v17.16b, v22.16b, v26.16b, #8
+        ext             v22.16b, v22.16b, v26.16b, #12
+
+        ext             v18.16b, v24.16b, v27.16b, #8
+        ext             v24.16b, v24.16b, v27.16b, #12
+
+        // Grad: Vertical & D0 (interleaved)
+        trn1            v21.8h, v20.8h, v16.8h      // first abs: operand 1
+        rev32           v23.8h, v22.8h              // second abs: operand 1
+        trn2            v29.8h, v28.8h, v19.8h      // second abs: operand 2
+        trn1            v30.8h, v22.8h, v22.8h
+        trn2            v31.8h, v24.8h, v24.8h
+        add             v30.8h, v30.8h, v30.8h
+        add             v31.8h, v31.8h, v31.8h
+        sub             v0.8h, v30.8h, v21.8h
+        sub             v1.8h, v31.8h, v23.8h
+        sabd            v4.8h, v0.8h, v24.8h
+
+        // Grad: Horizontal & D1 (interleaved)
+        trn2            v21.8h, v17.8h, v20.8h      // first abs: operand 1
+        saba            v4.8h, v1.8h, v29.8h
+        trn2            v23.8h, v22.8h, v18.8h      // first abs: operand 2
+        trn1            v25.8h, v24.8h, v26.8h      // second abs: operand 1
+        trn1            v29.8h, v27.8h, v28.8h      // second abs: operand 2
+        sub             v0.8h, v30.8h, v21.8h
+        sub             v1.8h, v31.8h, v25.8h
+        sabd            v5.8h, v0.8h, v23.8h
+
+        // Prepare for the next interation:
+        mov             v16.16b, v20.16b
+        saba            v5.8h, v1.8h, v29.8h
+        mov             v28.16b, v19.16b
+        mov             v22.16b, v26.16b
+        mov             v24.16b, v27.16b
+
+        add             w9, w9, #8                  // x += 8
+        b               2b
+20:
+        // 8 pixels -> 4 cycles of generic
+        // 4 pixels -> paddings => half needs to be saved
+        st2             {v4.4h, v5.4h}, [x17], #16
+
+        add             w8, w8, #ALF_GRADIENT_STEP  // y += 2
+        b               1b
+10:
+        ret
+.endm
+
+.macro ff_alf_classify_sum
+        // sum0          .req x0
+        // sum1          .req x1
+        // grad          .req x2
+        // gshift        .req w3
+        // steps         .req w4
+        mov             w5, #2
+        mov             w6, #0
+        mul             w3, w3, w5
+        movi            v16.4s, #0
+        movi            v21.4s, #0
+6:
+        prfm            pldl1keep, [x2]
+        cmp             w6, w4
+        bge             60f
+
+        ld1             {v17.4h}, [x2], #8
+        ld1             {v18.4h}, [x2], #8
+        uxtl            v17.4s, v17.4h
+        ld1             {v19.4h}, [x2], #8
+        uxtl            v18.4s, v18.4h
+        ld1             {v20.4h}, [x2], #8
+        uxtl            v19.4s, v19.4h
+        ld1             {v22.4h}, [x2], #8
+        uxtl            v20.4s, v20.4h
+        ld1             {v23.4h}, [x2]
+        uxtl            v22.4s, v22.4h
+        uxtl            v23.4s, v23.4h
+        add             v17.4s, v17.4s, v18.4s
+        add             v16.4s, v16.4s, v17.4s
+        add             v19.4s, v19.4s, v20.4s
+        add             v22.4s, v22.4s, v23.4s
+        add             v21.4s, v21.4s, v19.4s
+        add             v16.4s, v16.4s, v19.4s
+        add             v21.4s, v21.4s, v22.4s
+
+        sub             x2, x2, #8
+        add             w6, w6, #1                  // i += 1
+        add             x2, x2, x3                  // grad += gstride - size * ALF_NUM_DIR
+        b               6b
+60:
+        st1             {v16.4s}, [x0]
+        st1             {v21.4s}, [x1]
+        ret
+.endm
+
+
+function ff_alf_classify_sum_neon, export=1
+        ff_alf_classify_sum
+endfunc
+
+function ff_alf_classify_grad_8_neon, export=1
+        ff_alf_classify_grad 1
+endfunc
+
+function ff_alf_classify_grad_10_neon, export=1
+        ff_alf_classify_grad 2
+endfunc
+
+function ff_alf_classify_grad_12_neon, export=1
+        ff_alf_classify_grad 2
+endfunc
