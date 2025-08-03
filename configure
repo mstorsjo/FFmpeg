@@ -5093,6 +5093,7 @@ probe_cc(){
         _depflags='-MMD -MF $(@:.o=.d) -MT $@'
         _cflags_speed='-O3'
         _cflags_size='-Oz'
+        _ld_lib='-l%'
     elif $_cc -V 2>&1 | grep -q Sun; then
         _type=suncc
         _ident=$($_cc -V 2>&1 | head -n1 | cut -d' ' -f 2-)
@@ -5138,7 +5139,7 @@ probe_cc(){
         _cc_o='-Fo$@'
         _cc_e='-P'
         _flags_filter=icl_flags
-        _ld_lib='lib%.a'
+        _ld_lib='%.lib'
         _ld_path='-libpath:'
         # -Qdiag-error to make icl error when seeing certain unknown arguments
         _flags='-nologo -Qdiag-error:4044,10157'
@@ -5156,7 +5157,7 @@ probe_cc(){
         _ident=$($_cc -flavor gnu --version 2>/dev/null)
         _ld_o='-out:$@'
         _flags_filter=msvc_flags
-        _ld_lib='lib%.a'
+        _ld_lib='%.lib'
         _ld_path='-libpath:'
     elif $_cc -nologo- 2>&1 | grep -q ^Microsoft || { $_cc -v 2>&1 | grep -q clang && $_cc -? > /dev/null 2>&1; }; then
         _type=msvc
@@ -5186,7 +5187,7 @@ probe_cc(){
         fi
         _cc_o='-Fo$@'
         _cc_e='-P -Fi$@'
-        _ld_lib='lib%.a'
+        _ld_lib='%.lib'
         _ld_path='-libpath:'
         _flags='-nologo'
         disable stripping
@@ -5973,9 +5974,6 @@ case $target_os in
     win32|win64)
         disable symver
         if enabled shared; then
-            # Link to the import library instead of the normal static library
-            # for shared libs.
-            LD_LIB='%.lib'
             # Cannot build both shared and static libs with MSVC or icl.
             disable static
         fi
@@ -5983,6 +5981,8 @@ case $target_os in
         enabled x86_32 && check_ldflags -LARGEADDRESSAWARE
         add_cppflags -DWIN32_LEAN_AND_MEAN
         shlibdir_default="$bindir_default"
+        LIBPREF=""
+        LIBSUF=".lib"
         SLIBPREF=""
         SLIBSUF=".dll"
         SLIBNAME_WITH_VERSION='$(SLIBPREF)$(FULLNAME)-$(LIBVERSION)$(SLIBSUF)'
