@@ -54,7 +54,7 @@ static void yuv2planeX_8_ref(const int16_t *filter, int filterSize,
 
 #define CMP_FUNC(bits)                                                                      \
 static int cmp_off_by_n_##bits(const uint##bits##_t *ref, const uint##bits##_t *test,       \
-                               size_t n, int accuracy)                                        \
+                               size_t n, int accuracy)                                      \
 {                                                                                           \
     for (size_t i = 0; i < n; i++) {                                                        \
         if (abs((int)ref[i] - (int)test[i]) > accuracy)                                     \
