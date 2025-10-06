@@ -321,6 +321,7 @@ static const struct {
 #endif
 #if CONFIG_AVUTIL
         { "aes",       checkasm_check_aes },
+        { "hash",      checkasm_check_hash },
         { "fixed_dsp", checkasm_check_fixed_dsp },
         { "float_dsp", checkasm_check_float_dsp },
         { "lls",       checkasm_check_lls },
@@ -342,6 +343,7 @@ static const struct {
     { "I8MM",     "i8mm",     AV_CPU_FLAG_I8MM },
     { "SVE",      "sve",      AV_CPU_FLAG_SVE },
     { "SVE2",     "sve2",     AV_CPU_FLAG_SVE2 },
+    { "CRC32",    "crc32",    AV_CPU_FLAG_CRC32 },
 #elif ARCH_ARM
     { "ARMV5TE",  "armv5te",  AV_CPU_FLAG_ARMV5TE },
     { "ARMV6",    "armv6",    AV_CPU_FLAG_ARMV6 },

@@ -57,6 +57,12 @@ typedef enum {
     AV_CRC_MAX,         /*< Not part of public API! Do not use outside libavutil. */
 }AVCRCId;
 
+typedef struct AVCRCCtx {
+    const AVCRC *crctab;
+    uint32_t (*fn)(const AVCRC *crctab, uint32_t crc, const uint8_t *buffer,
+                   size_t length);
+} AVCRCCtx;
+
 /**
  * Initialize a CRC table.
  * @param ctx must be an array of size sizeof(AVCRC)*257 or sizeof(AVCRC)*1024
@@ -94,6 +100,25 @@ const AVCRC *av_crc_get_table(AVCRCId crc_id);
  */
 uint32_t av_crc(const AVCRC *ctx, uint32_t crc,
                 const uint8_t *buffer, size_t length) av_pure;
+
+/**
+ * Get a AVCRCCtx depends on AVCRCId
+ * @param crc_id    ID of a standard CRC
+ * @param ctx       AVCRCCtx which will be set
+ * @return          < 0 on failure
+ */
+int av_crc_get(AVCRCId crc_id, AVCRCCtx *ctx);
+
+/**
+ * Calculate the CRC of a block.
+ * @param ctx       AVCRCCtx get from av_crc_get()
+ * @param crc       CRC of previous blocks if any or initial value for CRC
+ * @param buffer    buffer whose CRC to calculate
+ * @param length    length of the buffer
+ * @return          CRC updated with the data from the given block
+ */
+uint32_t av_crc2(AVCRCCtx *ctx, uint32_t crc,
+                 const uint8_t *buffer, size_t length) av_pure;
 
 /**
  * @}

@@ -23,7 +23,7 @@
 #include "thread.h"
 #include "avassert.h"
 #include "bswap.h"
-#include "crc.h"
+#include "crc_internal.h"
 #include "error.h"
 
 #if CONFIG_HARDCODED_TABLES
@@ -412,4 +412,31 @@ uint32_t av_crc(const AVCRC *ctx, uint32_t crc,
         crc = ctx[((uint8_t) crc) ^ *buffer++] ^ (crc >> 8);
 
     return crc;
+}
+
+int av_crc_get(AVCRCId crc_id, AVCRCCtx *ctx)
+{
+    if (!ctx)
+        return AVERROR(EINVAL);
+
+    ctx->crctab = NULL;
+    ctx->fn = NULL;
+#if ARCH_AARCH64
+    ff_crc_get_aarch64(crc_id, ctx);
+#endif
+    if (ctx->fn)
+        return 0;
+
+    ctx->crctab = av_crc_get_table(crc_id);
+    if (!ctx->crctab)
+        return AVERROR_BUG;
+    ctx->fn = av_crc;
+
+    return 0;
+}
+
+uint32_t av_crc2(AVCRCCtx *ctx, uint32_t crc,
+                 const uint8_t *buffer, size_t length)
+{
+    return ctx->fn(ctx->crctab, crc, buffer, length);
 }
