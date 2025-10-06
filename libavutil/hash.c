@@ -66,7 +66,7 @@ enum hashtype {
 typedef struct AVHashContext {
     void *ctx;
     enum hashtype type;
-    const AVCRC *crctab;
+    AVCRCCtx crcctx;
     uint32_t crc;
 } AVHashContext;
 
@@ -137,7 +137,14 @@ int av_hash_alloc(AVHashContext **ctx, const char *name)
     case SHA512_256:
     case SHA384:
     case SHA512:  res->ctx = av_sha512_alloc(); break;
-    case CRC32:   res->crctab = av_crc_get_table(AV_CRC_32_IEEE_LE); break;
+    case CRC32: {
+        int err = av_crc_get(AV_CRC_32_IEEE_LE, &res->crcctx);
+        if (err < 0) {
+            av_free(res);
+            return err;
+        }
+    }
+        break;
     case ADLER32: break;
     }
     if (i != ADLER32 && i != CRC32 && !res->ctx) {
@@ -185,7 +192,7 @@ void av_hash_update(AVHashContext *ctx, const uint8_t *src, size_t len)
     case SHA512_256:
     case SHA384:
     case SHA512:  av_sha512_update(ctx->ctx, src, len); break;
-    case CRC32:   ctx->crc = av_crc(ctx->crctab, ctx->crc, src, len); break;
+    case CRC32:   ctx->crc = av_crc2(&ctx->crcctx, ctx->crc, src, len); break;
     case ADLER32: ctx->crc = av_adler32_update(ctx->crc, src, len); break;
     }
 }
