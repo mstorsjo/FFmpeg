@@ -1713,3 +1713,93 @@ endfunc
 #undef GRADIENT_V1_OFFSET
 #undef VX_OFFSET
 #undef VY_OFFSET
+
+#define VVC_MAX_PB_SIZE 128
+
+.macro put_luma_h_x8_16bit_ n, is_w_loop, shift
+        // dst           .req x0
+        // _src          .req x1
+        // _src_stride   .req x2
+        // height        .req w3
+        // hf            .req x4
+        // vf            .req x5
+        // width         .req w6
+        mov             x9, #(VVC_MAX_PB_SIZE * 2)
+        ld1             {v0.8b}, [x4]
+        sxtl            v0.8h, v0.8b
+        mov             w7, #0                      // y loop: height
+1:
+        sub             x11, x1, #6
+        add             w7, w7, #1
+        ld1             {v20.8h}, [x11], #16
+        mov             x10, x0
+    .if \is_w_loop == 1
+        mov             w8, #(8*\n)
+2:
+    .endif
+    .rept \n
+        ld1             {v16.8h}, [x11], #16
+        ext             v1.16b, v20.16b, v16.16b, #2
+        ext             v2.16b, v20.16b, v16.16b, #4
+        ext             v3.16b, v20.16b, v16.16b, #6
+        ext             v4.16b, v20.16b, v16.16b, #8
+        ext             v5.16b, v20.16b, v16.16b, #10
+        ext             v6.16b, v20.16b, v16.16b, #12
+        ext             v17.16b, v20.16b, v16.16b, #14
+        smull           v21.4s, v20.4h, v0.h[0]
+        smull2          v22.4s, v20.8h, v0.h[0]
+        smlal           v21.4s, v1.4h, v0.h[1]
+        smlal2          v22.4s, v1.8h, v0.h[1]
+        smlal           v21.4s, v2.4h, v0.h[2]
+        smlal2          v22.4s, v2.8h, v0.h[2]
+        smlal           v21.4s, v3.4h, v0.h[3]
+        smlal2          v22.4s, v3.8h, v0.h[3]
+        smlal           v21.4s, v4.4h, v0.h[4]
+        smlal2          v22.4s, v4.8h, v0.h[4]
+        smlal           v21.4s, v5.4h, v0.h[5]
+        smlal2          v22.4s, v5.8h, v0.h[5]
+        smlal           v21.4s, v6.4h, v0.h[6]
+        smlal2          v22.4s, v6.8h, v0.h[6]
+        smlal           v21.4s, v17.4h, v0.h[7]
+        smlal2          v22.4s, v17.8h, v0.h[7]
+        sqshrn          v21.4h, v21.4s, #(\shift)
+        sqshrn          v22.4h, v22.4s, #(\shift)
+        st1             {v21.4h, v22.4h}, [x10], #16
+        mov             v20.16b, v16.16b
+    .endr
+    .if \is_w_loop == 1
+        cmp             w8, w6
+        add             w8, w8, #(8*\n)
+        b.lt            2b
+    .endif
+        cmp             w7, w3
+        add             x0, x0, x9
+        add             x1, x1, x2
+        b.lt            1b
+        ret
+.endm
+
+function ff_vvc_put_luma_h8_10_neon, export=1
+        put_luma_h_x8_16bit_ 1, 0, 2
+endfunc
+
+function ff_vvc_put_luma_h8_12_neon, export=1
+        put_luma_h_x8_16bit_ 1, 0, 4
+endfunc
+
+function ff_vvc_put_luma_h16_10_neon, export=1
+        put_luma_h_x8_16bit_ 2, 0, 2
+endfunc
+
+function ff_vvc_put_luma_h16_12_neon, export=1
+        put_luma_h_x8_16bit_ 2, 0, 4
+endfunc
+
+function ff_vvc_put_luma_h_x16_10_neon, export=1
+        put_luma_h_x8_16bit_ 2, 1, 2
+endfunc
+
+function ff_vvc_put_luma_h_x16_12_neon, export=1
+        put_luma_h_x8_16bit_ 2, 1, 4
+endfunc
+
