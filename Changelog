@@ -8,6 +8,8 @@ version <next>:
 - hxvs demuxer for HXVS/HXVT IP camera format
 - MPEG-H 3D Audio decoding via mpeghdec
 - D3D12 H.264 encoder
+- drawvg filter via libcairo
+- ffmpeg CLI tiled HEIF support
 
 
 version 8.0:

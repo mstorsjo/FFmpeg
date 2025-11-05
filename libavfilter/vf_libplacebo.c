@@ -912,8 +912,9 @@ static void update_crops(AVFilterContext *ctx, LibplaceboInput *in,
         image->crop.y0 = av_expr_eval(s->crop_y_pexpr, s->var_values, NULL);
         image->crop.x1 = image->crop.x0 + s->var_values[VAR_CROP_W];
         image->crop.y1 = image->crop.y0 + s->var_values[VAR_CROP_H];
-        image->rotation = s->rotation;
-        if (s->rotation % PL_ROTATION_180 == PL_ROTATION_90) {
+
+        const pl_rotation rot_total = image->rotation - target->rotation;
+        if ((rot_total + PL_ROTATION_360) % PL_ROTATION_180 == PL_ROTATION_90) {
             /* Libplacebo expects the input crop relative to the actual frame
              * dimensions, so un-transpose them here */
             FFSWAP(float, image->crop.x0, image->crop.y0);
@@ -1150,6 +1151,7 @@ static bool map_frame(pl_gpu gpu, pl_tex *tex,
     ));
     out->lut = s->lut;
     out->lut_type = s->lut_type;
+    out->rotation += s->rotation;
 
     if (!s->apply_filmgrain)
         out->film_grain.type = PL_FILM_GRAIN_NONE;
@@ -1650,7 +1652,7 @@ static const AVOption libplacebo_options[] = {
     {"pc",                           NULL,   0, AV_OPT_TYPE_CONST, {.i64=AVCOL_RANGE_JPEG},         0, 0, STATIC, .unit = "range"},
     {"jpeg",                         NULL,   0, AV_OPT_TYPE_CONST, {.i64=AVCOL_RANGE_JPEG},         0, 0, STATIC, .unit = "range"},
 
-    {"color_primaries", "select color primaries", OFFSET(color_primaries), AV_OPT_TYPE_INT, {.i64=-1}, -1, AVCOL_PRI_NB-1, DYNAMIC, .unit = "color_primaries"},
+    {"color_primaries", "select color primaries", OFFSET(color_primaries), AV_OPT_TYPE_INT, {.i64=-1}, -1, AVCOL_PRI_EXT_NB-1, DYNAMIC, .unit = "color_primaries"},
     {"auto", "keep the same color primaries",  0, AV_OPT_TYPE_CONST, {.i64=-1},                     INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
     {"bt709",                           NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_BT709},        INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
     {"unknown",                         NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_UNSPECIFIED},  INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
@@ -1665,8 +1667,9 @@ static const AVOption libplacebo_options[] = {
     {"smpte432",                        NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_SMPTE432},     INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
     {"jedec-p22",                       NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_JEDEC_P22},    INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
     {"ebu3213",                         NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_EBU3213},      INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
+    {"vgamut",                          NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_PRI_V_GAMUT},      INT_MIN, INT_MAX, STATIC, .unit = "color_primaries"},
 
-    {"color_trc", "select color transfer", OFFSET(color_trc), AV_OPT_TYPE_INT, {.i64=-1}, -1, AVCOL_TRC_NB-1, DYNAMIC, .unit = "color_trc"},
+    {"color_trc", "select color transfer", OFFSET(color_trc), AV_OPT_TYPE_INT, {.i64=-1}, -1, AVCOL_TRC_EXT_NB-1, DYNAMIC, .unit = "color_trc"},
     {"auto", "keep the same color transfer",  0, AV_OPT_TYPE_CONST, {.i64=-1},                     INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
     {"bt709",                          NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_BT709},        INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
     {"unknown",                        NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_UNSPECIFIED},  INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
@@ -1682,6 +1685,7 @@ static const AVOption libplacebo_options[] = {
     {"bt2020-12",                      NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_BT2020_12},    INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
     {"smpte2084",                      NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_SMPTE2084},    INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
     {"arib-std-b67",                   NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_ARIB_STD_B67}, INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
+    {"vlog",                           NULL,  0, AV_OPT_TYPE_CONST, {.i64=AVCOL_TRC_V_LOG},        INT_MIN, INT_MAX, STATIC, .unit = "color_trc"},
 
     {"rotate", "rotate the input clockwise", OFFSET(rotation), AV_OPT_TYPE_INT, {.i64=PL_ROTATION_0}, PL_ROTATION_0, PL_ROTATION_360, DYNAMIC, .unit = "rotation"},
     {"0",                              NULL,  0, AV_OPT_TYPE_CONST, {.i64=PL_ROTATION_0},   .flags = STATIC, .unit = "rotation"},
