@@ -190,7 +190,7 @@ static void check_ops(const char *report, const unsigned ranges[NB_PLANES],
     uintptr_t id = (uintptr_t) backend_new;
     id ^= (id << 6) + (id >> 2) + 0x9e3779b97f4a7c15 + comp_new.cpu_flags;
 
-    if (check_key((void*) id, "%s", report)) {
+    if (check_key(id, "%s", report)) {
         exec.block_size_in  = comp_ref.block_size * rw_pixel_bits(read_op)  >> 3;
         exec.block_size_out = comp_ref.block_size * rw_pixel_bits(write_op) >> 3;
         for (int i = 0; i < NB_PLANES; i++) {

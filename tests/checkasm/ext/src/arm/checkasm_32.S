@@ -1,32 +1,95 @@
-/****************************************************************************
- * Assembly testing and benchmarking tool
- * Copyright (c) 2015 Martin Storsjo
- * Copyright (c) 2015 Janne Grunau
+/******************************************************************************
+ * Copyright © 2018, VideoLAN and dav1d authors
+ * Copyright © 2015 Martin Storsjo
+ * Copyright © 2015 Janne Grunau
+ * All rights reserved.
  *
- * This file is part of FFmpeg.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * FFmpeg is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
  *
- * FFmpeg is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02111, USA.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#include "libavutil/arm/asm.S"
+#include "checkasm_config.h"
+#include "arm/asm.S"
 
-/* override fpu so that NEON instructions are rejected */
-#if HAVE_VFP
-FPU     .fpu            vfp
-ELF     .eabi_attribute 10, 0           @ suppress Tag_FP_arch
+#ifndef __ARM_ARCH
+#ifdef _M_ARM
+#define __ARM_ARCH _M_ARM
+#else
+#define __ARM_ARCH 0
 #endif
+#endif
+
+.macro v4bx rd
+#if __ARM_ARCH >= 5 || defined(__ARM_ARCH_4T__)
+        bx              \rd
+#else
+        mov             pc, \rd
+#endif
+.endm
+
+.macro v4blx rd
+#if __ARM_ARCH >= 5
+        blx             \rd
+#else
+        mov             lr,  pc
+        v4bx            \rd
+#endif
+.endm
+
+.macro movrel_local rd, val, offset=0
+#if (__ARM_ARCH >= 7 || defined(__ARM_ARCH_6T2__)) && !defined(PIC)
+        movw            \rd, #:lower16:\val+\offset
+        movt            \rd, #:upper16:\val+\offset
+#else
+        ldr             \rd,  90001f
+        b               90002f
+90001:
+        .word           \val + \offset - (90002f + 8 - 4 * CONFIG_THUMB)
+90002:
+        add             \rd,  \rd,  pc
+#endif
+.endm
+
+.macro movrel rd, val, offset=0
+#if defined(PIC) && defined(__APPLE__)
+        ldr             \rd,  1f
+        b               2f
+1:
+        .word           3f - (2f + 8 - 4 * CONFIG_THUMB)
+2:
+        ldr             \rd,  [pc, \rd]
+.if \offset < 0
+        sub             \rd,  \rd,  #-(\offset)
+.elseif \offset > 0
+        add             \rd,  \rd,  #\offset
+.endif
+        .non_lazy_symbol_pointer
+3:
+        .indirect_symbol \val
+        .word       0
+        .text
+#else
+        movrel_local    \rd, \val, \offset
+#endif
+.endm
 
 const register_init, align=3
         .quad 0x21f86d66c8ca00ce
@@ -60,7 +123,7 @@ endconst
 
 .macro clobbercheck variant
 .equ pushed, 4*9
-function checkasm_checked_call_\variant, export=1
+function checked_call_\variant, export=1
         push            {r4-r11, lr}
 .ifc \variant, vfp
         vpush           {d8-d15}
@@ -98,9 +161,10 @@ function checkasm_checked_call_\variant, export=1
         mov             r12, r0
         mov             r0,  r2
         mov             r1,  r3
-        ldrd            r2,  r3,  [sp, #ARG_STACK_A + pushed]
+        ldr             r2,  [sp, #ARG_STACK_A + pushed]
+        ldr             r3,  [sp, #ARG_STACK_A + pushed + 4]
         @ Call the target function
-        blx             r12
+        v4blx           r12
 
         @ Load the number of stack parameters, stack canary and its reference
         ldr             r12, [sp, #ARG_STACK_A + pushed + 8 + 4*(MAX_ARGS-4)]
@@ -117,7 +181,8 @@ function checkasm_checked_call_\variant, export=1
         movrel          r12, register_init
 .ifc \variant, vfp
 .macro check_reg_vfp, dreg, offset
-        ldrd            r2,  r3,  [r12, #8 * (\offset)]
+        ldr             r2,  [r12, #(8 * (\offset))]
+        ldr             r3,  [r12, #(8 * (\offset)) + 4]
         vmov            r0,  lr,  \dreg
         eor             r2,  r2,  r0
         eor             r3,  r3,  lr
@@ -145,7 +210,8 @@ function checkasm_checked_call_\variant, export=1
         @ keep track of the checked GPR
         mov             r1,  #4
 .macro check_reg reg1, reg2=
-        ldrd            r2,  r3,  [r12], #8
+        ldr             r2,  [r12], #4
+        ldr             r3,  [r12], #4
         eors            r2,  r2,  \reg1
         bne             2f
         add             r1,  r1,  #1
@@ -179,7 +245,7 @@ function checkasm_checked_call_\variant, export=1
 2:
         movrel          r0, error_message_gpr
 1:
-        bl              X(checkasm_fail_func)
+        b               X(fail_abort)
 0:
         pop             {r0, r1}
 .ifc \variant, vfp
@@ -191,7 +257,5 @@ function checkasm_checked_call_\variant, export=1
 endfunc
 .endm
 
-#if HAVE_VFP || HAVE_NEON
-clobbercheck vfp
-#endif
 clobbercheck novfp
+clobbercheck vfp

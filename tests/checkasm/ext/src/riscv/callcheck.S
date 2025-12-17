@@ -1,24 +1,31 @@
 /****************************************************************************
- * Copyright © 2022 Rémi Denis-Courmont.
+ * Copyright © 2022-2025 Rémi Denis-Courmont.
+ * All rights reserved.
  *
- * This file is part of FFmpeg.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * FFmpeg is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
  *
- * FFmpeg is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02111, USA.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#include "libavutil/riscv/asm.S"
+#include "riscv/asm.S"
 
 #if (__riscv_xlen == 32)
 .macro  lx      rd, addr
@@ -86,6 +93,16 @@
 #error "Unknown float ABI"
 #endif
 
+function clobber_args, export=1, visible=1
+        .irp    n, 0, 1, 2, 3, 4, 5, 6, 7
+        li      a\n, -\n
+#ifndef __riscv_float_abi_soft
+        fcvt.s.w    fa\n, a\n
+#endif
+        .endr
+        ret
+endfunc
+
         .pushsection .tbss, "waT"
         .align  4
 .Lchecked_func:
@@ -99,38 +116,11 @@
         .fill   1, XSZ, 0 // RA
         .popsection
 
-func checkasm_set_function
+function set_function, export=1, visible=1
         lpad    0
         la.tls.ie t0, .Lchecked_func
         add     t0, tp, t0
         sx      a0, (t0)
-        ret
-endfunc
-
-func checkasm_get_wrapper, v
-        lpad    0
-        addi    sp, sp, -STACK_SPACE(2 * XSZ)
-        sx      fp,     (sp)
-        sx      ra, XSZ(sp)
-        addi    fp, sp, STACK_SPACE(2 * XSZ)
-
-        call    av_get_cpu_flags
-        andi    t0, a0, 8 /* AV_CPU_FLAG_RVV_I32 */
-#ifdef __riscv_float_abi_soft
-        andi    t1, a0, 16 /* AV_CPU_FLAG_RVV_F32 (implies F and Zve32x) */
-        lla     a0, checkasm_checked_call_i
-        beqz    t0, 1f
-        lla     a0, checkasm_checked_call_iv
-        beqz    t1, 1f
-#else
-        lla     a0, checkasm_checked_call_if
-        beqz    t0, 1f
-#endif
-        lla     a0, checkasm_checked_call_ifv
-1:
-        lx      ra, XSZ(sp)
-        lx      fp,    (sp)
-        addi    sp, sp, 16
         ret
 endfunc
 
@@ -156,12 +146,11 @@ endfunc
 #endif
         .popsection
 
-func checkasm_checked_call_i
-        /* <-- Entry point without the Vector extension --> */
+function checked_call_i, export=1
         lpad    0
-        /* Save RA, unallocatable and callee-saved registers */
+        # Save RA, unallocatable and callee-saved registers
         la.tls.ie t0, .Lsaved_xregs
-        add     t0, tp, t0
+        add     t0, t0, tp
         sx      ra,        (t0)
         sx      sp, 1 * XSZ(t0)
         sx      gp, 2 * XSZ(t0)
@@ -170,7 +159,7 @@ func checkasm_checked_call_i
         sx      s\n, (4 + \n) * XSZ(t0)
         .endr
 
-        /* Clobber the stack space right below SP */
+        # Clobber the stack space right below SP
         li      t1, REG_MAGIC
         li      t0, 16
 1:
@@ -189,16 +178,16 @@ func checkasm_checked_call_i
         mv      s\n, t1
         .endr
 
-        /* Call the tested function */
+        # Call the tested function (NOT using T1 to enforce FE-CFI labelling)
         la.tls.ie t0, .Lchecked_func
-        add     t0, tp, t0
+        add     t0, t0, tp
         lx      t3, (t0)
         sx      zero, (t0)
         jalr    t3
 
-        /* Check special register values */
+        # Check special register values
         la.tls.ie t0, .Lsaved_xregs
-        add     t0, tp, t0
+        add     t0, t0, tp
         lx      t2, 1 * XSZ(t0) // SP
         lx      t3, 2 * XSZ(t0) // GP
         lx      t4, 3 * XSZ(t0) // TP
@@ -207,50 +196,48 @@ func checkasm_checked_call_i
         li      t1, 'G'
         bne     t3, gp, .Lfail_xp
         li      t1, 'T'
+        # NOTE: If TP was corrupted, this will probably crash at `lx` above.
         bne     t4, tp, .Lfail_xp
 
-        /* Check value of saved registers */
+        # Check saved register values
         li      t0, REG_MAGIC
         .irp    n, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
         li      t1, \n
         bne     t0, s\n, .Lfail_s
         .endr
 
-4:
-        /* Restore RA and saved registers */
+        # Restore RA and callee-saved registers
         la.tls.ie t0, .Lsaved_xregs
-        add     t0, tp, t0
+        add     t0, t0, tp
         lx      ra, (t0)
         .irp    n, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
-        lx      s\n, (4 + \n) * XSZ(t0)
+        lx      s\n, (XSZ * (4 + \n))(t0)
         .endr
         ret
 
 .Lfail_xp:
-        # checkasm_fail_func() needs valid SP, GP and TP. Restore them.
+        # checkasm_fail_abort() needs valid SP, GP and TP. Restore them.
         lx      sp, 1 * XSZ(t0)
         lx      gp, 2 * XSZ(t0)
         lx      tp, 3 * XSZ(t0)
         lla     a0, .Lfail_rsvd_reg
         mv      a1, t1
-        call    checkasm_fail_func
-        j       4b
+        tail    checkasm_fail_abort
 
 .Lfail_s:
         lla     a0, .Lfail_s_reg
         mv      a1, t1
-        call    checkasm_fail_func
-        j       4b
+        tail    checkasm_fail_abort
 endfunc
 
 #ifndef __riscv_float_abi_soft
-func checkasm_checked_call_if, f
+function checked_call_if, export=1
         lpad    0
         # Save callee-saved floating point registers and RA
         la.tls.ie t0, .Lsaved_fregs
         add     t0, t0, tp
         lla     t1, .Lbad_float
-        sd      ra, 12 * FSZ(t0)
+        sx      ra, 12 * FSZ(t0)
         .irp    n, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
         fsf     fs\n, \n * FSZ(t0)
         .endr
@@ -277,23 +264,22 @@ func checkasm_checked_call_if, f
         beqz    t0, .Lfail_fs
         .endr
 
-1:      # Restore callee-saved floating point registers and RA
+        # Restore callee-saved floating point registers and RA
         la.tls.ie t0, .Lsaved_fregs
         add     t0, t0, tp
         .irp    n, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
         flf     fs\n, \n * FSZ(t0)
         .endr
-        ld      ra, 12 * FSZ(t0)
+        lx      ra, 12 * FSZ(t0)
         ret
 
 .Lfail_fs:
         lla     a0, .Lfail_fs_reg
         mv      a1, t1
-        call    checkasm_fail_func
-        j       1b
+        tail    checkasm_fail_abort
 endfunc
 #else
-func checkasm_checked_call_if, f
+function checked_call_if, export=1, ext=f
         lpad    0
         lla     t1, .Lbad_float
         # Clobber all floating point registers (soft float ABI).
@@ -307,14 +293,14 @@ func checkasm_checked_call_if, f
         j       checkasm_checked_call_i
 endfunc
 
-func checkasm_checked_call_iv, zve32x
+function checked_call_iv, export=1, ext=zve32x
         lpad    0
         jal     t0, .Lclobber_v
         j       checkasm_checked_call_i
 endfunc
 #endif
 
-func checkasm_checked_call_ifv, zve32x
+function checked_call_ifv, export=1, ext=zve32x
         lpad    0
         jal     t0, .Lclobber_v
         j       checkasm_checked_call_if
@@ -334,4 +320,10 @@ func checkasm_checked_call_ifv, zve32x
         csrwi   vxrm, 3      /* Rounding mode: round-to-odd */
         csrwi   vxsat, 1     /* Saturation:    encountered */
         jr      t0
+endfunc
+
+function get_vlen, export=1, ext="zve32x,zicsr"
+        csrr    a0, vlenb
+        slli    a0, a0, 0x3
+        ret
 endfunc
