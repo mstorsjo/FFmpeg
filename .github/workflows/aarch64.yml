@@ -229,14 +229,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: ffmpeg
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: msys
-          path-type: inherit
-          install: >-
-            make
+      - name: Install busybox
+        run: |
+          curl -LO https://frippery.org/files/busybox/busybox64a.exe
+          ./busybox64a.exe --install c:\busybox
+          echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          rm c:\busybox\link.exe
+          rm c:\busybox\make.exe
       - name: Build and test checkasm
-        shell: msys2 {0}
+        shell: sh
         run: |
           mkdir build
           cd build
