@@ -5,13 +5,21 @@ on:
 
 jobs:
   msvc:
-    runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86
+          - x64
+          - arm64
+    runs-on: ${{startsWith(matrix.arch, 'a') && 'windows-11-arm' || 'windows-latest'}}
     steps:
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: arm64
+          arch: ${{matrix.arch}}
       - name: Checkout gas-preprocessor
+        if: ${{startsWith(matrix.arch, 'a')}}
         uses: actions/checkout@v4
         with:
           repository: ffmpeg/gas-preprocessor
@@ -26,12 +34,14 @@ jobs:
           path-type: inherit
           install: >-
             make
+          pacboy: >-
+            nasm:p
       - name: Build and test checkasm
         shell: msys2 {0}
         run: |
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-gpl
+          ../ffmpeg/configure ${{startsWith(matrix.arch, 'a') && '--arch=arm64' || ''}} --target-os=win32 --toolchain=msvc --enable-gpl
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
