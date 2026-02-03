@@ -78,7 +78,7 @@ jobs:
       - name: Install busybox
         run: |
           curl -LO https://frippery.org/files/busybox/${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}}
-          ./${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}} --install c:\busybox
+          ./${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}} --install -s c:\busybox
           echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
           echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           rm c:\busybox\link.exe
