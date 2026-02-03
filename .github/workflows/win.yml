@@ -14,6 +14,11 @@ jobs:
           - arm64
     runs-on: ${{startsWith(matrix.arch, 'a') && 'windows-11-arm' || 'windows-latest'}}
     steps:
+      - name: Install prerequisites
+        run: |
+          choco install nasm
+          echo "C:\Program Files\NASM" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          choco install rsync
       - name: Set up the environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -31,18 +36,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: ffmpeg
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: msys
-          path-type: inherit
-          install: >-
-            make
-            rsync
-            diffutils
-          pacboy: >-
-            nasm:p
+      - name: Install busybox
+        run: |
+          curl -LO https://frippery.org/files/busybox/${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}}
+          ./${{startsWith(matrix.arch, 'a') && 'busybox64a.exe' || 'busybox64.exe'}} --install c:\busybox
+          echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          rm c:\busybox\link.exe
+          rm c:\busybox\make.exe
+          # This uses make c:\mingw64\bin instead, which happens to be in
+          # PATH from before.
       - name: Build and test fate
-        shell: msys2 {0}
+        shell: sh
         run: |
           mkdir build
           cd build
