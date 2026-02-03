@@ -25,6 +25,9 @@ jobs:
           repository: ffmpeg/gas-preprocessor
           ref: e29a3c6ebd85c252372eaedaf2973c6f9e9fdc4e
           path: gas-preprocessor
+      - name: Avoid git checking out files with CRLF
+        run: |
+          git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           path: ffmpeg
@@ -34,14 +37,17 @@ jobs:
           path-type: inherit
           install: >-
             make
+            rsync
+            diffutils
           pacboy: >-
             nasm:p
-      - name: Build and test checkasm
+      - name: Build and test fate
         shell: msys2 {0}
         run: |
           mkdir build
           cd build
           export PATH=$(pwd)/../gas-preprocessor:$PATH
-          ../ffmpeg/configure ${{startsWith(matrix.arch, 'a') && '--arch=arm64' || ''}} --target-os=win32 --toolchain=msvc --enable-gpl
-          make -j$(nproc) checkasm
-          make -j$(nproc) run-checkasm
+          ../ffmpeg/configure ${{startsWith(matrix.arch, 'a') && '--arch=arm64' || ''}} --target-os=win32 --toolchain=msvc --enable-gpl --samples=../fate-samples
+          make -j$(nproc)
+          make fate-rsync
+          make -j$(nproc) fate
