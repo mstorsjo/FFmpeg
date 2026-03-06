@@ -135,8 +135,7 @@ $(CHECKASMOBJS): ASFLAGS += -I$(SRC_PATH)/tests/checkasm/ext/include
 OUTDIRS += $(CHECKASMDIRS)
 
 # Expose checkasm_config_generated.* to the external checkasm files only.
-# -D_GNU_SOURCE required for Linux perf.
-$(EXT_CHECKASMOBJS:%=tests/checkasm/%): CFLAGS += -Itests/checkasm/ext/src -I$(SRC_PATH)/tests/checkasm/ext/src -D_GNU_SOURCE
+$(EXT_CHECKASMOBJS:%=tests/checkasm/%): CFLAGS += -Itests/checkasm/ext/src -I$(SRC_PATH)/tests/checkasm/ext/src
 $(EXT_CHECKASMOBJS:%=tests/checkasm/%): ASFLAGS += -Itests/checkasm/ext/src -I$(SRC_PATH)/tests/checkasm/ext/src
 $(EXT_CHECKASMOBJS:%=tests/checkasm/%): X86ASMFLAGS += -Itests/checkasm/ext/src -I$(SRC_PATH)/tests/checkasm/ext/src
 
