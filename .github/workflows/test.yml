@@ -10,14 +10,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [linux-aarch64]
+        runner: [ubuntu-24.04-arm]
         shared: ['static']
         bits: ['64']
         include:
-          - runner: linux-amd64
+          - runner: ubuntu-latest
             shared: 'static'
             bits: '32'
-          - runner: linux-amd64
+          - runner: ubuntu-latest
             shared: 'shared'
             bits: '64'
     runs-on: ${{ matrix.runner }}
@@ -65,7 +65,7 @@ jobs:
       matrix:
         image: ['ghcr.io/btbn/ffmpeg-builds/win64-gpl:latest']
         target_exec: ['wine']
-    runs-on: linux-amd64
+    runs-on: ubuntu-latest
     container: ${{ matrix.image }}
     steps:
       - name: Checkout

@@ -7,7 +7,7 @@ on:
 jobs:
   lint:
     name: Pre-Commit
-    runs-on: utilities
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
