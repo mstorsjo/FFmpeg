@@ -111,6 +111,8 @@ jobs:
           key: fate-suite-${{ steps.fate.outputs.hash }}
       - name: Run Fate
         shell: bash # Needed for [[ conditionals below
+        env:
+          WINEPREFIX: /root/.wineprefix
         run: |
           if [[ "${{ matrix.target_exec }}" == "wine" ]]; then
             export WINEDEBUG=-all
