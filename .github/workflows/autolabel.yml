@@ -20,12 +20,12 @@ jobs:
         uses: actions/labeler@v6
         if: ${{ forge.event_name == 'pull_request_target' }}
         with:
-          configuration-path: .forgejo/labeler/labeler.yml
+          configuration-path: .github/labeler/labeler.yml
           repo-token: ${{ secrets.AUTOLABELER_TOKEN }}
       - name: Label by title-match
         uses: actions/github-script@v8
         with:
           script: |
-            const script = require('.forgejo/labeler/labeler.js')
+            const script = require('.github/labeler/labeler.js')
             await script({github, context})
           github-token: ${{ secrets.AUTOLABELER_TOKEN }}
