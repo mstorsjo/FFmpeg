@@ -5,7 +5,7 @@ on:
   pull_request:
 
 concurrency:
-  cancel-in-progress: ${{ forge.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   run_fate:
