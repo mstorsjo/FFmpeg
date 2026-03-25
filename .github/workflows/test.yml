@@ -110,6 +110,7 @@ jobs:
           path: fate-suite
           key: fate-suite-${{ steps.fate.outputs.hash }}
       - name: Run Fate
+        shell: bash # Needed for [[ conditionals below
         run: |
           if [[ "${{ matrix.target_exec }}" == "wine" ]]; then
             export WINEDEBUG=-all
