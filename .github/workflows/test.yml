@@ -24,6 +24,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install nasm
+      - name: Install prerequisites
+        if: matrix.bits == '32'
+        run: |
+          sudo apt-get update && sudo apt-get install gcc-multilib
       - name: Configure
         run: |
           ./configure --enable-gpl --enable-nonfree --enable-memory-poisoning --assert-level=2 \
