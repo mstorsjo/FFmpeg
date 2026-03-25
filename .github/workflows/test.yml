@@ -116,6 +116,6 @@ jobs:
             export WINEDEBUG=-all
             export FREI0R_PATH="$(winepath -w "$FREI0R_PATH")"
           fi
-          LD_LIBRARY_PATH="$(printf "%s:" "$PWD"/lib*)$PWD" make fate fate-build SAMPLES="$PWD/fate-suite" -j$(nproc) || FATERES=$?
+          LD_LIBRARY_PATH="$(printf "%s:" "$PWD"/lib*)$PWD" make fate fate-build SAMPLES="$PWD/fate-suite" -j$(nproc) V=1 || FATERES=$?
           find . -name "*.err" -exec printf '::group::%s\n' {} \; -exec cat {} \; -exec printf '::endgroup::\n' \;
           exit ${FATERES:-0}
