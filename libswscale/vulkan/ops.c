@@ -180,6 +180,10 @@ static void add_desc_read_write(FFVulkanDescriptorSetBinding *out_desc,
     *out_rep = op->type == SWS_PIXEL_F32 ? FF_VK_REP_FLOAT : FF_VK_REP_UINT;
 }
 
+#define QSTR "(%i/%i%s)"
+#define QTYPE(i) op->c.q4[i].num, op->c.q4[i].den,       \
+                 cur_type == SWS_PIXEL_F32 ? ".0f" : ""
+
 static int add_ops_glsl(VulkanPriv *p, FFVulkanOpsCtx *s,
                         SwsOpList *ops, FFVulkanShader *shd)
 {
@@ -218,18 +222,21 @@ static int add_ops_glsl(VulkanPriv *p, FFVulkanOpsCtx *s,
     GLSLC(1,     u8vec4 u8;                                                   );
     GLSLC(1,     u16vec4 u16;                                                 );
     GLSLC(1,     u32vec4 u32;                                                 );
-    GLSLC(1,     f32vec4 f32;                                                 );
+    GLSLC(1,     precise f32vec4 f32;                                         );
+    GLSLC(1,     precise f32vec4 tmp;                                         );
     GLSLC(0,                                                                  );
 
-    const char *type_name = ff_sws_pixel_type_name(ops->ops[0].type);
     for (int n = 0; n < ops->num_ops; n++) {
         const SwsOp *op = &ops->ops[n];
-        const char *type_v = op->type == SWS_PIXEL_F32 ? "f32vec4" :
-                             op->type == SWS_PIXEL_U32 ? "u32vec4" :
-                             op->type == SWS_PIXEL_U16 ? "u16vec4" : "u8vec4";
-        const char *type_s = op->type == SWS_PIXEL_F32 ? "float" :
-                             op->type == SWS_PIXEL_U32 ? "uint32_t" :
-                             op->type == SWS_PIXEL_U16 ? "uint16_t" : "uint8_t";
+        SwsPixelType cur_type = op->op == SWS_OP_CONVERT ? op->convert.to :
+                                op->type;
+        const char *type_name = ff_sws_pixel_type_name(cur_type);
+        const char *type_v = cur_type == SWS_PIXEL_F32 ? "f32vec4" :
+                             cur_type == SWS_PIXEL_U32 ? "u32vec4" :
+                             cur_type == SWS_PIXEL_U16 ? "u16vec4" : "u8vec4";
+        const char *type_s = cur_type == SWS_PIXEL_F32 ? "float" :
+                             cur_type == SWS_PIXEL_U32 ? "uint32_t" :
+                             cur_type == SWS_PIXEL_U16 ? "uint16_t" : "uint8_t";
         av_bprintf(&shd->src, "    // %s\n", ff_sws_op_type_name(op->op));
 
         switch (op->op) {
@@ -237,12 +244,15 @@ static int add_ops_glsl(VulkanPriv *p, FFVulkanOpsCtx *s,
             if (op->rw.frac) {
                 return AVERROR(ENOTSUP);
             } else if (op->rw.packed) {
-                GLSLF(1, %s = %s(imageLoad(src_img[0], pos));                  ,
-                      type_name, type_v);
+                GLSLF(1, %s = %s(imageLoad(src_img[0], pos)).%c%c%c%c;         ,
+                      type_name, type_v, "xyzw"[ops->order_src.in[0]],
+                                         "xyzw"[ops->order_src.in[1]],
+                                         "xyzw"[ops->order_src.in[2]],
+                                         "xyzw"[ops->order_src.in[3]]);
             } else {
                 for (int i = 0; i < (op->rw.packed ? 1 : op->rw.elems); i++)
                     GLSLF(1, %s.%c = %s(imageLoad(src_img[%i], pos)[0]);      ,
-                          type_name, "xyzw"[i], type_s, i);
+                          type_name, "xyzw"[i], type_s, ops->order_src.in[i]);
             }
             break;
         }
@@ -250,12 +260,15 @@ static int add_ops_glsl(VulkanPriv *p, FFVulkanOpsCtx *s,
             if (op->rw.frac) {
                 return AVERROR(ENOTSUP);
             } else if (op->rw.packed) {
-                GLSLF(1, imageStore(dst_img[0], pos, %s(%s));                  ,
-                      type_v, type_name);
+                GLSLF(1, imageStore(dst_img[0], pos, %s(%s).%c%c%c%c);         ,
+                      type_v, type_name, "xyzw"[ops->order_dst.in[0]],
+                                         "xyzw"[ops->order_dst.in[1]],
+                                         "xyzw"[ops->order_dst.in[2]],
+                                         "xyzw"[ops->order_dst.in[3]]);
             } else {
                 for (int i = 0; i < (op->rw.packed ? 1 : op->rw.elems); i++)
                     GLSLF(1, imageStore(dst_img[%i], pos, %s(%s[%i]));         ,
-                          i, type_v, type_name, i);
+                          ops->order_dst.in[i], type_v, type_name, i);
             }
             break;
         }
@@ -270,12 +283,83 @@ static int add_ops_glsl(VulkanPriv *p, FFVulkanOpsCtx *s,
             for (int i = 0; i < 4; i++) {
                 if (!op->c.q4[i].den)
                     continue;
-                av_bprintf(&shd->src, "    %s.%c = %s(%i/%i%s);\n", type_name,
-                           "xyzw"[i], type_s, op->c.q4[i].num, op->c.q4[i].den,
-                           op->type == SWS_PIXEL_F32 ? ".0f" : "");
+                av_bprintf(&shd->src, "    %s.%c = %s"QSTR";\n", type_name,
+                           "xyzw"[i], type_s, QTYPE(i));
             }
             break;
         }
+        case SWS_OP_SCALE:
+            av_bprintf(&shd->src, "    %s = %s*%i/%i;\n",
+                       type_name, type_name, op->c.q.num, op->c.q.den);
+            break;
+        case SWS_OP_MIN:
+        case SWS_OP_MAX:
+            for (int i = 0; i < 4; i++) {
+                if (!op->c.q4[i].den)
+                    continue;
+                av_bprintf(&shd->src, "    %s.%c = %s(%s.%c, "QSTR");\n",
+                           type_name, "xyzw"[i],
+                           op->op == SWS_OP_MIN ? "min" : "max",
+                           type_name, "xyzw"[i],
+                           op->c.q4[i].num, op->c.q4[i].den,
+                           cur_type == SWS_PIXEL_F32 ? ".0f" : "");
+            }
+            break;
+        case SWS_OP_LSHIFT:
+        case SWS_OP_RSHIFT:
+            av_bprintf(&shd->src, "    %s %s= %i;\n", type_name,
+                       op->op == SWS_OP_LSHIFT ? "<<" : ">>", op->c.u);
+            break;
+        case SWS_OP_CONVERT:
+            if (ff_sws_pixel_type_is_int(cur_type) && op->convert.expand) {
+                const AVRational sc = ff_sws_pixel_expand(op->type, op->convert.to);
+                av_bprintf(&shd->src, "    %s = %s((%s*%i)/%i);\n",
+                           type_name, type_v, ff_sws_pixel_type_name(op->type),
+                           sc.num, sc.den);
+            } else {
+                av_bprintf(&shd->src, "    %s = %s(%s);\n",
+                           type_name, type_v, ff_sws_pixel_type_name(op->type));
+            }
+            break;
+        case SWS_OP_DITHER:
+            av_bprintf(&shd->src, "    precise const float dm%i[%i][%i] = {\n",
+                       n, 1 << op->dither.size_log2, 1 << op->dither.size_log2);
+            int size = (1 << op->dither.size_log2);
+            for (int i = 0; i < size; i++) {
+                av_bprintf(&shd->src, "        { ");
+                for (int j = 0; j < size; j++)
+                    av_bprintf(&shd->src, "%i/%i.0, ",
+                               op->dither.matrix[i*size + j].num,
+                               op->dither.matrix[i*size + j].den);
+                av_bprintf(&shd->src, "}, %s\n", i == (size - 1) ? "\n    };" : "");
+            }
+            for (int i = 0; i < 4; i++) {
+                if (op->dither.y_offset[i] < 0)
+                    continue;
+                av_bprintf(&shd->src, "    %s.%c += dm%i[(pos.y + %i) & %i]"
+                                                        "[pos.x & %i];\n",
+                           type_name, "xyzw"[i], n,
+                           op->dither.y_offset[i], size - 1,
+                           size - 1);
+            }
+            break;
+        case SWS_OP_LINEAR:
+            for (int i = 0; i < 4; i++) {
+                if (op->lin.m[i][4].num)
+                    av_bprintf(&shd->src, "    tmp.%c = (%i/%i.0);\n", "xyzw"[i],
+                               op->lin.m[i][4].num, op->lin.m[i][4].den);
+                else
+                    av_bprintf(&shd->src, "    tmp.%c = 0;\n", "xyzw"[i]);
+                for (int j = 0; j < 4; j++) {
+                    if (!op->lin.m[i][j].num)
+                        continue;
+                    av_bprintf(&shd->src, "    tmp.%c += f32.%c*(%i/%i.0);\n",
+                               "xyzw"[i], "xyzw"[j],
+                               op->lin.m[i][j].num, op->lin.m[i][j].den);
+                }
+            }
+            av_bprintf(&shd->src, "    f32 = tmp;\n");
+            break;
         default:
             return AVERROR(ENOTSUP);
         }

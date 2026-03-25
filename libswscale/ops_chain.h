@@ -37,6 +37,8 @@
  * that is an implementation detail of the specific backend.
  */
 
+typedef struct SwsOpTable SwsOpTable;
+
 /**
  * Private data for each kernel.
  */
@@ -60,12 +62,6 @@ typedef union SwsOpPriv {
 
 static_assert(sizeof(SwsOpPriv) == 16, "SwsOpPriv size mismatch");
 
-/* Setup helpers */
-int ff_sws_setup_u(const SwsOp *op, SwsOpPriv *out);
-int ff_sws_setup_u8(const SwsOp *op, SwsOpPriv *out);
-int ff_sws_setup_q(const SwsOp *op, SwsOpPriv *out);
-int ff_sws_setup_q4(const SwsOp *op, SwsOpPriv *out);
-
 /**
  * Per-kernel execution context.
  *
@@ -88,9 +84,11 @@ static_assert(offsetof(SwsOpImpl, priv) == 16, "SwsOpImpl layout mismatch");
 typedef struct SwsOpChain {
 #define SWS_MAX_OPS 16
     SwsOpImpl impl[SWS_MAX_OPS + 1]; /* reserve extra space for the entrypoint */
-    void (*free[SWS_MAX_OPS + 1])(SwsOpPriv);
+    void (*free[SWS_MAX_OPS + 1])(SwsOpPriv *);
     int num_impl;
-    int cpu_flags; /* set of all used CPU flags */
+    int cpu_flags;  /* set of all used CPU flags */
+    int over_read;  /* chain over-reads input by this many bytes */
+    int over_write; /* chain over-writes output by this many bytes */
 } SwsOpChain;
 
 SwsOpChain *ff_sws_op_chain_alloc(void);
@@ -102,7 +100,21 @@ static inline void ff_sws_op_chain_free(SwsOpChain *chain)
 
 /* Returns 0 on success, or a negative error code. */
 int ff_sws_op_chain_append(SwsOpChain *chain, SwsFuncPtr func,
-                           void (*free)(SwsOpPriv), const SwsOpPriv *priv);
+                           void (*free)(SwsOpPriv *), const SwsOpPriv *priv);
+
+typedef struct SwsImplParams {
+    const SwsOpTable *table;
+    const SwsOp *op;
+    SwsContext *ctx;
+} SwsImplParams;
+
+typedef struct SwsImplResult {
+    SwsFuncPtr func; /* overrides `SwsOpEntry.func` if non-NULL */
+    SwsOpPriv priv; /* private data for this implementation instance */
+    void (*free)(SwsOpPriv *priv); /* free function for `priv` */
+    int over_read;  /* implementation over-reads input by this many bytes */
+    int over_write; /* implementation over-writes output by this many bytes */
+} SwsImplResult;
 
 typedef struct SwsOpEntry {
     /* Kernel metadata; reduced size subset of SwsOp */
@@ -124,20 +136,25 @@ typedef struct SwsOpEntry {
 
     /* Kernel implementation */
     SwsFuncPtr func;
-    int (*setup)(const SwsOp *op, SwsOpPriv *out); /* optional */
-    void (*free)(SwsOpPriv priv);
+    int (*setup)(const SwsImplParams *params, SwsImplResult *out); /* optional */
 } SwsOpEntry;
 
-static inline void ff_op_priv_free(SwsOpPriv priv)
+/* Setup helpers */
+int ff_sws_setup_u(const SwsImplParams *params, SwsImplResult *out);
+int ff_sws_setup_u8(const SwsImplParams *params, SwsImplResult *out);
+int ff_sws_setup_q(const SwsImplParams *params, SwsImplResult *out);
+int ff_sws_setup_q4(const SwsImplParams *params, SwsImplResult *out);
+
+static inline void ff_op_priv_free(SwsOpPriv *priv)
 {
-    av_free(priv.ptr);
+    av_freep(&priv->ptr);
 }
 
-typedef struct SwsOpTable {
+struct SwsOpTable {
     unsigned cpu_flags;   /* required CPU flags for this table */
     int block_size;       /* fixed block size of this table */
     const SwsOpEntry *entries[]; /* terminated by NULL */
-} SwsOpTable;
+};
 
 /**
  * "Compile" a single op by looking it up in a list of fixed size op tables.
@@ -145,8 +162,8 @@ typedef struct SwsOpTable {
  *
  * Returns 0, AVERROR(EAGAIN), or a negative error code.
  */
-int ff_sws_op_compile_tables(const SwsOpTable *const tables[], int num_tables,
-                             SwsOpList *ops, const int block_size,
+int ff_sws_op_compile_tables(SwsContext *ctx, const SwsOpTable *const tables[],
+                             int num_tables, SwsOpList *ops, const int block_size,
                              SwsOpChain *chain);
 
 #endif
