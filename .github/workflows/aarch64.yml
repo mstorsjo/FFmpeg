@@ -54,24 +54,34 @@ jobs:
           make -j$(nproc) fate
           make -j$(nproc) run-checkasm
 
-  linux-pacbti:
+  linux-pac-bti-gcs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Set up Fedora cross sysroot
         run: |
-          docker run --rm -v $PWD:/host fedora:35 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
+          docker run --rm -v $PWD:/host fedora:43 bash -c "yum -y install glibc-devel gcc && tar -cf /host/fedora.tar /usr /etc/ld.so.cache"
           mkdir -p /opt/fedora-sysroot
           tar -C /opt/fedora-sysroot -xf fedora*.tar
           rm fedora*.tar
           ln -s usr/lib64 /opt/fedora-sysroot/lib64
           ln -s usr/lib /opt/fedora-sysroot/lib
       - uses: actions/checkout@v6
+      - name: Install a new enough QEMU
+        run: |
+          # Download a version from Ubuntu 26.04
+          curl -LO https://ports.ubuntu.com/ubuntu-ports/pool/universe/q/qemu/qemu-user_10.2.1+ds-1ubuntu2_arm64.deb
+          # Installing the package depends on a package ubuntu-virt, which doesn't exist in 24.04
+          #sudo dpkg -i qemu-user*.deb
+          # Therefore, just unpack it manually
+          sudo dpkg-deb -x qemu-user*.deb /
       - name: Build and test checkasm
         run: |
-          sudo apt-get update && sudo apt-get install clang qemu-user-static
+          sudo apt-get update && sudo apt-get install clang-20 lld-20
+          sudo ln -sf clang-20 /usr/bin/clang
+          sudo ln -sf ld.lld-20 /usr/bin/ld.lld
           mkdir build
           cd build
-          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -Wl,-z,force-bti -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl --target-exec="qemu-aarch64-static -L /opt/fedora-sysroot"
+          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -fuse-ld=lld -Wl,-z,force-bti,-z,gcs=always,-z,gcs-report=warning -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl --target-exec="qemu-aarch64 -L /opt/fedora-sysroot -E GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1"
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
