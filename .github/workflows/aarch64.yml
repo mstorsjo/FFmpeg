@@ -79,7 +79,9 @@ jobs:
           sudo dpkg-deb -x qemu-user*.deb /
       - name: Build and test checkasm
         run: |
-          sudo apt-get update && sudo apt-get install clang
+          sudo apt-get update && sudo apt-get install clang-20 lld-20
+          sudo ln -sf clang-20 /usr/bin/clang
+          sudo ln -sf ld.lld-20 /usr/bin/ld.lld
           mkdir build
           cd build
           ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -fuse-ld=lld -Wl,-z,force-bti,-z,gcs=always,-z,gcs-report=warning -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/11" --enable-gpl --target-exec="qemu-aarch64 -L /opt/fedora-sysroot -E GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1"
