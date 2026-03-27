@@ -257,6 +257,39 @@ jobs:
           make -j$(nproc) checkasm
           make -j$(nproc) run-checkasm
 
+  msvc-cross:
+    runs-on: windows-latest
+    steps:
+      - name: Set up the environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+      - name: Checkout gas-preprocessor
+        uses: actions/checkout@v6
+        with:
+          repository: ffmpeg/gas-preprocessor
+          ref: e29a3c6ebd85c252372eaedaf2973c6f9e9fdc4e
+          path: gas-preprocessor
+      - uses: actions/checkout@v6
+        with:
+          path: ffmpeg
+      - name: Install busybox
+        run: |
+          curl -LO https://frippery.org/files/busybox/busybox64.exe
+          ./busybox64.exe --install c:\busybox
+          echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          rm c:\busybox\link.exe
+          rm c:\busybox\make.exe
+      - name: Build
+        shell: sh
+        run: |
+          mkdir build
+          cd build
+          export PATH=$(pwd)/../gas-preprocessor:$PATH
+          ../ffmpeg/configure --arch=arm64 --target-os=win32 --toolchain=msvc --enable-cross-compile --enable-gpl
+          make -j$(nproc) checkasm
+
   indent:
     runs-on: ubuntu-latest
     steps:
