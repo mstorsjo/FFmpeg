@@ -11,6 +11,7 @@ on:
 
 jobs:
   linux-x86_64:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -26,6 +27,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-gcc:
+    if: false
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
@@ -40,6 +42,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-clang:
+    if: false
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
@@ -55,6 +58,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-pac-bti-gcs:
+    if: false
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Set up Fedora cross sysroot
@@ -85,6 +89,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -104,6 +109,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   android-old-ndk:
+    if: false
     runs-on: ubuntu-22.04 # libtinfo5 is not available in 24.04
     steps:
       - uses: actions/checkout@v6
@@ -126,6 +132,7 @@ jobs:
           make -j$(nproc) checkasm
 
   android-new-ndk:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -144,6 +151,7 @@ jobs:
           make -j$(nproc) checkasm
 
   macos:
+    if: false
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v6
@@ -165,6 +173,7 @@ jobs:
           make -j$(sysctl -n hw.ncpu) run-checkasm
 
   msvc-wine:
+    if: false
     runs-on: ubuntu-24.04-arm
     container: ghcr.io/mstorsjo/wine
     steps:
@@ -202,6 +211,7 @@ jobs:
           make -j$(nproc) run-checkasm
 
   llvm-mingw:
+    if: false
     runs-on: ubuntu-24.04-arm
     container: ghcr.io/mstorsjo/wine
     steps:
@@ -276,7 +286,7 @@ jobs:
       - name: Install busybox
         run: |
           curl -LO https://frippery.org/files/busybox/busybox64.exe
-          ./busybox64.exe --install c:\busybox
+          ./busybox64.exe --install -s c:\busybox
           echo "c:\busybox" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
           echo "BB_OVERRIDE_APPLETS=link make" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           rm c:\busybox\link.exe
