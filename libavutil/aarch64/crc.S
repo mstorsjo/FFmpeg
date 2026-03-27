@@ -402,7 +402,7 @@ function ff_crc32_pmull_eor3_aarch64, export=1
         crc32x          w1, w1, x10
 
 4: // buf 16b aligned
-        cmp             x3, #8192
+        cmp             x3, #2, lsl #12 // 8192
         b.lo            12f // 4x fold
 
         mov             x8, #-6148914691236517206
