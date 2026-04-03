@@ -21,9 +21,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "libavutil/attributes_internal.h"
-#include "libavutil/mem.h"
-#include "libavutil/blowfish.h"
+#define AV_BF_ROUNDS 16
+
+typedef struct AVBlowfish {
+    uint32_t p[AV_BF_ROUNDS + 2];
+    uint32_t s[4][256];
+} AVBlowfish;
+
+AVBlowfish *av_blowfish_alloc(void);
+void av_blowfish_init(struct AVBlowfish *ctx, const uint8_t *key, int key_len);
+void av_blowfish_crypt_ecb(struct AVBlowfish *ctx, uint32_t *xl, uint32_t *xr,
+                           int decrypt);
+void av_blowfish_crypt(struct AVBlowfish *ctx, uint8_t *dst, const uint8_t *src,
+                       int count, uint8_t *iv, int decrypt);
 
 #define NUM_VARIABLE_KEY_TESTS 34
 
@@ -110,9 +120,9 @@ static const uint32_t ciphertext_r[NUM_VARIABLE_KEY_TESTS] = {
 };
 
 /* plaintext bytes */
-static attribute_nonstring const uint8_t plaintext[8] = "BLOWFISH";
+static const uint8_t plaintext[8] = "BLOWFISH";
 
-static attribute_nonstring const uint8_t plaintext2[16] = "BLOWFISHBLOWFISH";
+static const uint8_t plaintext2[16] = "BLOWFISHBLOWFISH";
 
 /* ciphertext bytes */
 static const uint8_t ciphertext[8] = {
@@ -188,7 +198,7 @@ int main(void)
         }
     }
     printf("Test encryption/decryption success.\n");
-    av_free(ctx);
+    free(ctx);
 
     return 0;
 }
