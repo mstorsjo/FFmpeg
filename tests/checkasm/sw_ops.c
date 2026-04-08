@@ -186,7 +186,7 @@ static void check_compiled(const char *name, const SwsOpBackend *backend,
     uintptr_t id = (uintptr_t) comp_new->func;
     id ^= (id << 6) + (id >> 2) + 0x9e3779b97f4a7c15 + comp_new->cpu_flags;
 
-    if (check_key((void*) id, "%s/%s", name, backend->name)) {
+    if (check_key(id, "%s/%s", name, backend->name)) {
         exec.block_size_in  = comp_ref->block_size * rw_pixel_bits(read_op)  >> 3;
         exec.block_size_out = comp_ref->block_size * rw_pixel_bits(write_op) >> 3;
         for (int i = 0; i < NB_PLANES; i++) {
@@ -310,7 +310,7 @@ static void check_ops(const char *name, const unsigned ranges[NB_PLANES],
         if (backend->hw_format != AV_PIX_FMT_NONE || backend == backend_ref)
             continue;
 
-        if (!av_get_cpu_flags()) {
+        if (!checkasm_get_cpu_info()) {
             /* Also test once with the existing C reference to set the baseline */
             check_compiled(name, backend, read_op, write_op, ranges, &comp_ref, &comp_ref);
         }
