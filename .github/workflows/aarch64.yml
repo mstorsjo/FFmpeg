@@ -69,7 +69,7 @@ jobs:
       - name: Install a new enough QEMU
         run: |
           # Download a version from Ubuntu 26.04
-          curl -LO https://ports.ubuntu.com/ubuntu-ports/pool/universe/q/qemu/qemu-user_10.2.1+ds-1ubuntu2_arm64.deb
+          curl -LO https://ports.ubuntu.com/ubuntu-ports/pool/universe/q/qemu/qemu-user_10.2.1+ds-1ubuntu3_arm64.deb
           # Installing the package depends on a package ubuntu-virt, which doesn't exist in 24.04
           #sudo dpkg -i qemu-user*.deb
           # Therefore, just unpack it manually
