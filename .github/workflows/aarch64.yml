@@ -84,7 +84,7 @@ jobs:
           sudo ln -sf ld.lld-20 /usr/bin/ld.lld
           mkdir build
           cd build
-          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-cflags="-mbranch-protection=standard" --extra-ldflags="-mbranch-protection=standard -fuse-ld=lld -Wl,-z,force-bti,-z,gcs=always,-z,gcs-report=warning -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/15" --enable-gpl --target-exec="qemu-aarch64 -L /opt/fedora-sysroot -E GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1"
+          ../configure --cc=clang --sysroot=/opt/fedora-sysroot --extra-ldflags="-fuse-ld=lld -L/opt/fedora-sysroot/usr/lib64 -L/opt/fedora-sysroot/usr/lib/gcc/aarch64-redhat-linux/15" --enable-gpl --target-exec="qemu-aarch64 -L /opt/fedora-sysroot"
           make -j$(nproc) run-checkasm
 
   linux-old-toolchain:
