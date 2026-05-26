@@ -346,6 +346,7 @@ checked_call_fn _emms
 ;-----------------------------------------------------------------------------
 %macro checked_call_fn 0-1
 cvisible checked_call%1, 1, 7
+    vzeroupper
     mov            r3, [esp+stack_offset]      ; return address
     mov            r1, [esp+stack_offset+17*4] ; num_stack_params
     mov            r2, 27
