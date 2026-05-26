@@ -28,6 +28,5 @@ jobs:
           cd build
           ../configure --enable-gpl --enable-nonfree --enable-memory-poisoning --assert-level=2 \
               $([ "${{ matrix.bits }}" != "32" ] || echo --arch=x86_32 --extra-cflags=-m32 --extra-cxxflags=-m32 --extra-ldflags=-m32)
-          make -j$(nproc)
-          objdump -d libavcodec/x86/blockdsp.o
-          make -j$(nproc) run-checkasm
+          make -j$(nproc) checkasm
+          ./tests/checkasm/checkasm --test=sw_range_convert
