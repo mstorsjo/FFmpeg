@@ -1,0 +1,27 @@
+name: Build and run tests
+
+on:
+  push:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bits:
+          - 64
+          - 32
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install nasm gcc-multilib
+      - name: Build and run tests
+        run: |
+          mkdir build
+          cd build
+          ../configure --enable-gpl --enable-nonfree --enable-memory-poisoning --assert-level=2 \
+              $([ "${{ matrix.bits }}" != "32" ] || echo --arch=x86_32 --extra-cflags=-m32 --extra-cxxflags=-m32 --extra-ldflags=-m32)
+          make -j$(nproc)
+          make -j$(nproc) run-checkasm
