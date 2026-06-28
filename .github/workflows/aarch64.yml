@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install an old toolchain
         run: |
-          curl -LO https://martin.st/temp/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux.tar.xz
+          curl -LO https://martin.st/temp/gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu.tar.xz
           tar -Jxf gcc-linaro-*.tar.xz
           rm gcc-linaro-*.tar.xz
           sudo mv gcc-linaro* /opt/gcc-linaro
