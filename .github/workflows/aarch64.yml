@@ -27,7 +27,6 @@ jobs:
           cd build
           ../configure --enable-gpl --samples=../samples
           make -j$(sysctl -n hw.ncpu)
-          make -j$(sysctl -n hw.ncpu) fate-rsync
           make -j$(sysctl -n hw.ncpu) fate-seek-hls
           make -j$(sysctl -n hw.ncpu) run-checkasm
       - uses: actions/upload-artifact@v6
