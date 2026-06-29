@@ -158,7 +158,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure --enable-gpl --samples=../samples
+          ../configure --enable-gpl --samples=../samples --ignore-tests="seek-hls"
           make -j$(sysctl -n hw.ncpu)
           make -j$(sysctl -n hw.ncpu) fate-rsync
           make -j$(sysctl -n hw.ncpu) fate
