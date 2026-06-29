@@ -28,5 +28,5 @@ jobs:
           ../configure --enable-gpl --samples=../samples
           make -j$(sysctl -n hw.ncpu)
           make -j$(sysctl -n hw.ncpu) fate-rsync
-          make -j$(sysctl -n hw.ncpu) fate
+          make -j$(sysctl -n hw.ncpu) fate-seek-hls
           make -j$(sysctl -n hw.ncpu) run-checkasm
