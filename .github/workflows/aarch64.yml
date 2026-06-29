@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ../configure --enable-gpl --samples=../samples
+          ../configure --enable-gpl --samples=../samples --disable-libxcb --disable-xlib
           make -j$(sysctl -n hw.ncpu)
           make -j$(sysctl -n hw.ncpu) fate-seek-hls
           make -j$(sysctl -n hw.ncpu) run-checkasm
