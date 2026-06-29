@@ -11,16 +11,21 @@ on:
 
 jobs:
   macos:
-    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-14
+          - macos-15
+          - macos-15-intel
+          - macos-latest
+          - macos-26
+    runs-on: ${{matrix.runner}}
     steps:
       - uses: actions/checkout@v6
-      - name: Check host type
+      - name: Install prerequisites
         run: |
-          ARCH=$(uname -m)
-          if [ "$ARCH" != "arm64" ]; then
-              echo Unexpected host architecture $ARCH
-              exit 1
-          fi
+          brew install nasm
       - name: Build and run all tests
         run: |
           mkdir build
@@ -32,7 +37,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: build
+          name: build-${{matrix.runner}}
           path: |
             build
           retention-days: 7
